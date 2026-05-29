@@ -54,6 +54,12 @@ def create_quality_views(connection: psycopg.Connection) -> None:
     execute_sql_file(connection, sql_file_path)
 
 
+def create_analysis_views(connection: psycopg.Connection) -> None:
+    """Create or replace database views for analysis-ready data."""
+    sql_file_path = PROJECT_ROOT / "db" / "003_create_analysis_views.sql"
+    execute_sql_file(connection, sql_file_path)
+
+
 def insert_import(
     connection: psycopg.Connection,
     source_system: str,
