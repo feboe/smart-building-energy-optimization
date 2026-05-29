@@ -1,4 +1,5 @@
 DROP VIEW IF EXISTS smart_company_analysis;
+DROP VIEW IF EXISTS electricity_p_calendar;
 DROP VIEW IF EXISTS electricity_p_clean;
 
 
@@ -85,9 +86,27 @@ LEFT JOIN day_ahead_prices prices
 WHERE load.gross_load_w IS NULL OR load.gross_load_w >= -100;
 
 
+CREATE OR REPLACE VIEW electricity_p_calendar AS
+SELECT
+    *,
+    observation_timestamp AT TIME ZONE 'Europe/Berlin' AS local_timestamp,
+    EXTRACT(YEAR FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        AS local_year,
+    EXTRACT(MONTH FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        AS local_month,
+    EXTRACT(DAY FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        AS local_day,
+    EXTRACT(HOUR FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        AS local_hour,
+    EXTRACT(ISODOW FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        AS local_isodow,
+    EXTRACT(ISODOW FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
+        IN (6, 7) AS is_weekend
+FROM electricity_p_clean;
+
+
 CREATE OR REPLACE VIEW smart_company_analysis AS
 SELECT
     *
-FROM electricity_p_clean
-WHERE observation_timestamp >= TIMESTAMPTZ '2020-12-31 23:00:00+00'
-    AND observation_timestamp < TIMESTAMPTZ '2021-12-31 23:00:00+00';
+FROM electricity_p_calendar
+WHERE local_year = 2021;
