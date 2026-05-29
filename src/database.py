@@ -48,6 +48,12 @@ def create_tables(connection: psycopg.Connection) -> None:
     execute_sql_file(connection, sql_file_path)
 
 
+def create_quality_views(connection: psycopg.Connection) -> None:
+    """Create or replace database views for measurement quality checks."""
+    sql_file_path = PROJECT_ROOT / "db" / "002_create_quality_views.sql"
+    execute_sql_file(connection, sql_file_path)
+
+
 def insert_import(
     connection: psycopg.Connection,
     source_system: str,
