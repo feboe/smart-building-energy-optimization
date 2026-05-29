@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS imports (
     source_path TEXT,
     resolution TEXT,
     imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE (source_system, import_name, resolution)
 );
 
 CREATE TABLE IF NOT EXISTS measurements (

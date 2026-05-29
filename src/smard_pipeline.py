@@ -1,5 +1,6 @@
 """Ingestion flow for loading selected SMARD series into PostgreSQL."""
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -7,20 +8,71 @@ import pandas as pd
 
 from src.config import load_database_config
 from src.database import (
+    MEASUREMENT_COLUMNS,
     create_tables,
     insert_import,
     insert_measurements,
     open_connection,
 )
-from src.smard_catalog import SmardSeries
-from src.smard_client import build_index_url, get_payload, get_timestamps
-from src.transform_smard import (
-    SOURCE_SYSTEM,
-    extract_measurements,
-    timestamp_ms_to_datetime,
+from src.smard_client import SmardConfig, build_index_url, get_payload, get_timestamps
+
+SOURCE_SYSTEM = "SMARD"
+LOCAL_TIMEZONE = ZoneInfo("Europe/Berlin")
+DEFAULT_REGION = "DE-LU"
+DEFAULT_RESOLUTION = "hour"
+
+
+@dataclass(frozen=True)
+class SmardSeries:
+    """Metadata and API configuration for one SMARD series."""
+
+    series_name: str
+    display_name: str
+    category: str
+    config: SmardConfig
+    unit: str = "MWh"
+
+
+DAY_AHEAD_PRICE = SmardSeries(
+    series_name="day_ahead_price",
+    display_name="Day-ahead price",
+    category="market_price",
+    config=SmardConfig(
+        smard_filter_id="4169",
+        region=DEFAULT_REGION,
+        resolution=DEFAULT_RESOLUTION,
+    ),
+    unit="EUR/MWh",
 )
 
-LOCAL_TIMEZONE = ZoneInfo("Europe/Berlin")
+
+def timestamp_ms_to_datetime(timestamp: int) -> datetime:
+    """Convert a Unix timestamp in milliseconds to a UTC datetime."""
+    return datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+
+
+def extract_measurements(
+    payload: dict,
+    import_id: int,
+    series: SmardSeries,
+) -> pd.DataFrame:
+    """Extract normalized measurement rows from a SMARD payload."""
+    if "series" not in payload:
+        raise ValueError("Payload does not contain 'series' key")
+
+    df = pd.DataFrame(payload["series"], columns=["timestamp_ms", "value"])
+    df["import_id"] = import_id
+    df["source_system"] = SOURCE_SYSTEM
+    df["source_series_id"] = series.config.smard_filter_id
+    df["series_name"] = series.series_name
+    df["category"] = series.category
+    df["region"] = series.config.region
+    df["resolution"] = series.config.resolution
+    df["unit"] = series.unit
+    df["observation_timestamp"] = df["timestamp_ms"].apply(
+        timestamp_ms_to_datetime
+    )
+    return df[MEASUREMENT_COLUMNS]
 
 
 def normalize_datetime_to_utc(value: datetime) -> datetime:

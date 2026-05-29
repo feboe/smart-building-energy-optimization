@@ -5,9 +5,20 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 from src.config import DatabaseConfig
 import pandas as pd
-from src.transform_smard import MEASUREMENT_COLUMNS
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+MEASUREMENT_COLUMNS = [
+    "import_id",
+    "source_system",
+    "source_series_id",
+    "series_name",
+    "category",
+    "region",
+    "resolution",
+    "unit",
+    "observation_timestamp",
+    "value",
+]
 
 
 def open_connection(config: DatabaseConfig) -> psycopg.Connection:
@@ -57,6 +68,10 @@ def insert_import(
                 metadata
             )
             VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (source_system, import_name, resolution)
+            DO UPDATE SET
+                source_path = EXCLUDED.source_path,
+                metadata = EXCLUDED.metadata
             RETURNING id;
             """,
             (
