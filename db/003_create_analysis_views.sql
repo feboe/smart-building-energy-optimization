@@ -72,9 +72,23 @@ SELECT
     load.chp_w,
     load.gross_load_w,
     load.total_w / 1000 AS grid_energy_kwh,
+    CASE
+        WHEN load.total_w > 0 THEN load.total_w / 1000
+        ELSE 0
+    END AS grid_import_kwh,
+    CASE
+        WHEN load.total_w < 0 THEN -load.total_w / 1000
+        ELSE 0
+    END AS grid_export_kwh,
     load.gross_load_w / 1000 AS gross_load_kwh,
-    -load.pv_w / 1000 AS pv_generation_kwh,
-    -load.chp_w / 1000 AS chp_generation_kwh,
+    CASE
+        WHEN load.pv_w < 0 THEN -load.pv_w / 1000
+        ELSE 0
+    END AS pv_generation_kwh,
+    CASE
+        WHEN load.chp_w < 0 THEN -load.chp_w / 1000
+        ELSE 0
+    END AS chp_generation_kwh,
     prices.day_ahead_price_eur_per_mwh,
     prices.day_ahead_price_eur_per_mwh / 1000 AS day_ahead_price_eur_per_kwh,
     load.pv_w_raw,
@@ -107,6 +121,21 @@ FROM electricity_p_clean;
 
 CREATE OR REPLACE VIEW smart_company_analysis AS
 SELECT
-    *
+    observation_timestamp,
+    local_timestamp,
+    total_w,
+    pv_w,
+    chp_w,
+    gross_load_kwh,
+    grid_energy_kwh,
+    grid_import_kwh,
+    grid_export_kwh,
+    pv_generation_kwh,
+    chp_generation_kwh,
+    day_ahead_price_eur_per_kwh,
+    local_month,
+    local_hour,
+    local_isodow,
+    is_weekend
 FROM electricity_p_calendar
 WHERE local_year = 2021;
