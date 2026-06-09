@@ -1,6 +1,12 @@
 """Scenario factories for BESS simulations."""
 
-from src.battery.parameters import BatteryParameters, ScenarioParameters
+from src.battery.parameters import (
+    DYNAMIC_SURPLUS_GRID_CHARGING,
+    DYNAMIC_SURPLUS_ONLY,
+    FIXED_SURPLUS_ONLY,
+    BatteryParameters,
+    ScenarioParameters,
+)
 
 
 def make_battery_parameters(
@@ -22,32 +28,46 @@ def make_battery_parameters(
     )
 
 
-def make_surplus_only_scenario(
+def make_fixed_surplus_only_scenario(
     export_price_eur_per_kwh: float = 0.0,
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
 ) -> ScenarioParameters:
-    """Build the surplus-only BESS scenario."""
+    """Build the fixed-price surplus-only BESS scenario."""
     return ScenarioParameters(
-        name="surplus_only",
-        allow_grid_charging=False,
+        name="fixed_surplus_only",
+        dispatch_strategy=FIXED_SURPLUS_ONLY,
         horizon_hours=horizon_hours,
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
     )
 
 
-def make_surplus_and_grid_charging_scenario(
+def make_dynamic_surplus_only_scenario(
     export_price_eur_per_kwh: float = 0.0,
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
 ) -> ScenarioParameters:
-    """Build the surplus plus grid-charging BESS scenario."""
+    """Build the dynamic-price surplus-only BESS scenario."""
     return ScenarioParameters(
-        name="surplus_and_grid_charging",
-        allow_grid_charging=True,
+        name="dynamic_surplus_only",
+        dispatch_strategy=DYNAMIC_SURPLUS_ONLY,
         horizon_hours=horizon_hours,
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
     )
 
+
+def make_dynamic_surplus_and_grid_charging_scenario(
+    export_price_eur_per_kwh: float = 0.0,
+    import_markup_eur_per_kwh: float = 0.0,
+    horizon_hours: int = 24,
+) -> ScenarioParameters:
+    """Build the dynamic-price surplus plus grid-charging BESS scenario."""
+    return ScenarioParameters(
+        name="dynamic_surplus_grid_charging",
+        dispatch_strategy=DYNAMIC_SURPLUS_GRID_CHARGING,
+        horizon_hours=horizon_hours,
+        import_markup_eur_per_kwh=import_markup_eur_per_kwh,
+        export_price_eur_per_kwh=export_price_eur_per_kwh,
+    )

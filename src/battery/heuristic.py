@@ -1,4 +1,4 @@
-"""Rolling-horizon heuristic dispatch for BESS simulations."""
+"""Heuristic dispatch rules for BESS simulations."""
 
 import pandas as pd
 
@@ -9,7 +9,13 @@ from src.battery.dispatch import (
     max_discharge_to_load_kwh,
     validate_dispatch_results,
 )
-from src.battery.parameters import BatteryParameters, ScenarioParameters
+from src.battery.parameters import (
+    DYNAMIC_SURPLUS_GRID_CHARGING,
+    DYNAMIC_SURPLUS_ONLY,
+    FIXED_SURPLUS_ONLY,
+    BatteryParameters,
+    ScenarioParameters,
+)
 
 
 def run_heuristic_dispatch(
@@ -18,41 +24,109 @@ def run_heuristic_dispatch(
     scenario: ScenarioParameters,
     initial_soc_kwh: float | None = None,
 ) -> pd.DataFrame:
-    """Run the price-aware rolling-horizon heuristic."""
+    """Run the heuristic dispatch rule configured by the scenario."""
     prepared_df = prepare_simulation_data(analysis_df, scenario)
+    soc_kwh = _initial_soc(initial_soc_kwh, battery)
+
+    if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
+        return _run_dispatch_loop(
+            prepared_df=prepared_df,
+            battery=battery,
+            scenario=scenario,
+            initial_soc_kwh=soc_kwh,
+            always_discharge=True,
+            allow_grid_charging=False,
+            use_price_thresholds=False,
+        )
+
+    if scenario.dispatch_strategy == DYNAMIC_SURPLUS_ONLY:
+        return _run_dispatch_loop(
+            prepared_df=prepared_df,
+            battery=battery,
+            scenario=scenario,
+            initial_soc_kwh=soc_kwh,
+            always_discharge=False,
+            allow_grid_charging=False,
+            use_price_thresholds=True,
+        )
+
+    if scenario.dispatch_strategy == DYNAMIC_SURPLUS_GRID_CHARGING:
+        return _run_dispatch_loop(
+            prepared_df=prepared_df,
+            battery=battery,
+            scenario=scenario,
+            initial_soc_kwh=soc_kwh,
+            always_discharge=False,
+            allow_grid_charging=True,
+            use_price_thresholds=True,
+        )
+
+    raise ValueError(f"Unknown dispatch strategy: {scenario.dispatch_strategy}")
+
+
+def _initial_soc(
+    initial_soc_kwh: float | None,
+    battery: BatteryParameters,
+) -> float:
     soc_kwh = (
         battery.min_soc_kwh if initial_soc_kwh is None else float(initial_soc_kwh)
     )
     if not battery.min_soc_kwh <= soc_kwh <= battery.max_soc_kwh:
         raise ValueError("initial_soc_kwh must be within configured SOC limits.")
+    return soc_kwh
 
+
+def _run_dispatch_loop(
+    prepared_df: pd.DataFrame,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+    initial_soc_kwh: float,
+    always_discharge: bool,
+    allow_grid_charging: bool,
+    use_price_thresholds: bool,
+) -> pd.DataFrame:
     records = []
+    soc_kwh = initial_soc_kwh
     prices = prepared_df["dynamic_import_price_eur_per_kwh"]
 
     for index, row in prepared_df.iterrows():
-        horizon_prices = prices.iloc[index : index + scenario.horizon_hours]
-        low_price_threshold = float(
-            horizon_prices.quantile(scenario.low_price_quantile)
-        )
-        high_price_threshold = float(
-            horizon_prices.quantile(scenario.high_price_quantile)
-        )
         current_price = float(row["dynamic_import_price_eur_per_kwh"])
-        is_low_price = current_price <= low_price_threshold
-        is_high_price = current_price >= high_price_threshold
+        if use_price_thresholds:
+            horizon_prices = prices.iloc[index : index + scenario.horizon_hours]
+            low_price_threshold = float(
+                horizon_prices.quantile(scenario.low_price_quantile)
+            )
+            high_price_threshold = float(
+                horizon_prices.quantile(scenario.high_price_quantile)
+            )
+            is_low_price = current_price <= low_price_threshold
+            is_high_price = current_price >= high_price_threshold
+        else:
+            low_price_threshold = float("nan")
+            high_price_threshold = float("nan")
+            is_low_price = False
+            is_high_price = False
 
         soc_start_kwh = soc_kwh
         available_surplus_kwh = float(row["available_surplus_kwh"])
         demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
+        charge_power_remaining_kwh = battery.max_charge_power_kw
 
-        charge_limit_kwh = max_charge_input_kwh(soc_kwh, battery)
+        charge_limit_kwh = min(
+            max_charge_input_kwh(soc_kwh, battery),
+            charge_power_remaining_kwh,
+        )
         charge_from_surplus_kwh = min(available_surplus_kwh, charge_limit_kwh)
         soc_kwh += charge_from_surplus_kwh * battery.eta_charge
+        charge_power_remaining_kwh -= charge_from_surplus_kwh
         remaining_surplus_kwh = available_surplus_kwh - charge_from_surplus_kwh
-        remaining_charge_limit_kwh = max_charge_input_kwh(soc_kwh, battery)
 
         discharge_to_load_kwh = 0.0
-        if demand_after_generation_kwh > 0 and is_high_price:
+        should_discharge = (
+            demand_after_generation_kwh > 0
+            and (always_discharge or is_high_price)
+        )
+        if should_discharge:
             discharge_to_load_kwh = min(
                 demand_after_generation_kwh,
                 max_discharge_to_load_kwh(soc_kwh, battery),
@@ -63,13 +137,14 @@ def run_heuristic_dispatch(
 
         charge_from_grid_kwh = 0.0
         if (
-            scenario.allow_grid_charging
+            allow_grid_charging
             and discharge_to_load_kwh == 0
             and is_low_price
+            and charge_power_remaining_kwh > 0
         ):
             charge_from_grid_kwh = min(
-                remaining_charge_limit_kwh,
                 max_charge_input_kwh(soc_kwh, battery),
+                charge_power_remaining_kwh,
             )
             soc_kwh += charge_from_grid_kwh * battery.eta_charge
 
@@ -108,4 +183,3 @@ def run_heuristic_dispatch(
         expected_row_count=len(prepared_df),
     )
     return dispatch_df
-

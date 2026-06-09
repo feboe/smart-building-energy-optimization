@@ -2,6 +2,16 @@
 
 from dataclasses import dataclass
 
+FIXED_SURPLUS_ONLY = "fixed_surplus_only"
+DYNAMIC_SURPLUS_ONLY = "dynamic_surplus_only"
+DYNAMIC_SURPLUS_GRID_CHARGING = "dynamic_surplus_grid_charging"
+
+VALID_DISPATCH_STRATEGIES = {
+    FIXED_SURPLUS_ONLY,
+    DYNAMIC_SURPLUS_ONLY,
+    DYNAMIC_SURPLUS_GRID_CHARGING,
+}
+
 
 @dataclass(frozen=True)
 class BatteryParameters:
@@ -56,7 +66,7 @@ class ScenarioParameters:
     """Economic and control assumptions for one simulation scenario."""
 
     name: str
-    allow_grid_charging: bool
+    dispatch_strategy: str
     horizon_hours: int = 24
     import_markup_eur_per_kwh: float = 0.0
     export_price_eur_per_kwh: float = 0.0
@@ -65,6 +75,11 @@ class ScenarioParameters:
     fixed_import_price_eur_per_kwh: float | None = None
 
     def __post_init__(self) -> None:
+        if self.dispatch_strategy not in VALID_DISPATCH_STRATEGIES:
+            raise ValueError(
+                "dispatch_strategy must be one of "
+                f"{sorted(VALID_DISPATCH_STRATEGIES)}."
+            )
         if self.horizon_hours <= 0:
             raise ValueError("horizon_hours must be greater than zero.")
         if not 0 <= self.low_price_quantile <= 1:
@@ -76,4 +91,3 @@ class ScenarioParameters:
                 "low_price_quantile must be lower than or equal to "
                 "high_price_quantile."
             )
-

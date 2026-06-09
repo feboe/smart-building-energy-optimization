@@ -3,7 +3,11 @@
 import pandas as pd
 
 from src.battery.data import prepare_simulation_data
-from src.battery.parameters import BatteryParameters, ScenarioParameters
+from src.battery.parameters import (
+    FIXED_SURPLUS_ONLY,
+    BatteryParameters,
+    ScenarioParameters,
+)
 
 
 def fixed_import_price(
@@ -100,20 +104,28 @@ def calculate_dispatch_metrics(
         if total_generation_kwh > 0
         else 0
     )
-    baseline = calculate_baseline_metrics(prepared_df, scenario)
+    baseline = calculate_baseline_metrics(analysis_df, scenario)
 
     discharge_throughput_kwh = float(dispatch_df["discharge_to_load_kwh"].sum())
 
+    if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
+        price_model = "fixed"
+        net_cost_eur = fixed_net_cost_eur
+        baseline_net_cost_eur = baseline["baseline_fixed_net_cost_eur"]
+    else:
+        price_model = "dynamic"
+        net_cost_eur = dynamic_net_cost_eur
+        baseline_net_cost_eur = baseline["baseline_dynamic_net_cost_eur"]
+
     return {
         "scenario": scenario.name,
+        "dispatch_strategy": scenario.dispatch_strategy,
+        "price_model": price_model,
         "capacity_kwh": battery.capacity_kwh,
         "c_rate": battery.c_rate,
-        "dynamic_net_cost_eur": dynamic_net_cost_eur,
-        "fixed_net_cost_eur": fixed_net_cost_eur,
-        "dynamic_effective_cost_eur_per_load_kwh": (
-            dynamic_net_cost_eur / total_load_kwh
-        ),
-        "fixed_effective_cost_eur_per_load_kwh": fixed_net_cost_eur / total_load_kwh,
+        "net_cost_eur": net_cost_eur,
+        "effective_cost_eur_per_load_kwh": net_cost_eur / total_load_kwh,
+        "cost_savings_eur": baseline_net_cost_eur - net_cost_eur,
         "grid_import_kwh": grid_import_kwh,
         "grid_export_kwh": grid_export_kwh,
         "battery_charge_throughput_kwh": float(
@@ -126,12 +138,5 @@ def calculate_dispatch_metrics(
         "self_consumption_improvement": (
             self_consumption_ratio - baseline["baseline_self_consumption_ratio"]
         ),
-        "dynamic_cost_savings_eur": (
-            baseline["baseline_dynamic_net_cost_eur"] - dynamic_net_cost_eur
-        ),
-        "fixed_cost_savings_eur": (
-            baseline["baseline_fixed_net_cost_eur"] - fixed_net_cost_eur
-        ),
         "fixed_import_price_eur_per_kwh": fixed_price,
     }
-
