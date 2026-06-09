@@ -131,6 +131,7 @@ def calculate_dispatch_metrics(
         "price_model": price_model,
         "capacity_kwh": battery.capacity_kwh,
         "c_rate": battery.c_rate,
+        "grid_connection_limit_kw": scenario.grid_connection_limit_kw,
         "degradation_cost_eur_per_kwh": battery.degradation_cost_eur_per_kwh,
         "grid_import_cost_eur": grid_import_cost_eur,
         "grid_export_revenue_eur": grid_export_revenue_eur,

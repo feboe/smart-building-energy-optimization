@@ -1,5 +1,6 @@
 """Shared parameter objects for BESS simulations."""
 
+import math
 from dataclasses import dataclass
 
 FIXED_SURPLUS_ONLY = "fixed_surplus_only"
@@ -80,6 +81,7 @@ class ScenarioParameters:
     high_price_quantile: float = 0.75
     fixed_import_price_eur_per_kwh: float | None = None
     surplus_reserve_fraction: float = 1.0
+    grid_connection_limit_kw: float | None = None
 
     def __post_init__(self) -> None:
         if self.dispatch_strategy not in VALID_DISPATCH_STRATEGIES:
@@ -100,3 +102,10 @@ class ScenarioParameters:
             )
         if not 0 <= self.surplus_reserve_fraction <= 1:
             raise ValueError("surplus_reserve_fraction must be between 0 and 1.")
+        if self.grid_connection_limit_kw is not None and (
+            not math.isfinite(self.grid_connection_limit_kw)
+            or self.grid_connection_limit_kw <= 0
+        ):
+            raise ValueError(
+                "grid_connection_limit_kw must be positive when configured."
+            )

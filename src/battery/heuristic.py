@@ -165,6 +165,10 @@ def _run_dispatch_loop(
                 max_charge_input_kwh(soc_kwh, battery),
                 charge_power_remaining_kwh,
                 reserve_limited_charge_kwh,
+                _grid_connection_charge_limit_kwh(
+                    remaining_deficit_kwh,
+                    scenario,
+                ),
             )
             soc_kwh += charge_from_grid_kwh * battery.eta_charge
 
@@ -239,3 +243,15 @@ def _future_surplus_reserve(
         reserved_surplus_headroom_kwh,
         grid_charge_soc_limit_kwh,
     )
+
+
+def _grid_connection_charge_limit_kwh(
+    remaining_deficit_kwh: float,
+    scenario: ScenarioParameters,
+    timestep_hours: float = 1.0,
+) -> float:
+    if scenario.grid_connection_limit_kw is None:
+        return float("inf")
+
+    grid_limit_kwh = scenario.grid_connection_limit_kw * timestep_hours
+    return max(grid_limit_kwh - remaining_deficit_kwh, 0)

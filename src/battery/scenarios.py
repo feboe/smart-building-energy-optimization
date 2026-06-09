@@ -34,6 +34,7 @@ def make_fixed_surplus_only_scenario(
     export_price_eur_per_kwh: float = 0.0,
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
+    grid_connection_limit_kw: float | None = None,
 ) -> ScenarioParameters:
     """Build the fixed-price surplus-only BESS scenario."""
     return ScenarioParameters(
@@ -42,6 +43,7 @@ def make_fixed_surplus_only_scenario(
         horizon_hours=horizon_hours,
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
+        grid_connection_limit_kw=grid_connection_limit_kw,
     )
 
 
@@ -49,6 +51,7 @@ def make_dynamic_surplus_only_scenario(
     export_price_eur_per_kwh: float = 0.0,
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
+    grid_connection_limit_kw: float | None = None,
 ) -> ScenarioParameters:
     """Build the dynamic-price surplus-only BESS scenario."""
     return ScenarioParameters(
@@ -57,6 +60,7 @@ def make_dynamic_surplus_only_scenario(
         horizon_hours=horizon_hours,
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
+        grid_connection_limit_kw=grid_connection_limit_kw,
     )
 
 
@@ -65,6 +69,7 @@ def make_dynamic_surplus_and_grid_charging_scenario(
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
     surplus_reserve_fraction: float = 1.0,
+    grid_connection_limit_kw: float | None = 500.0,
 ) -> ScenarioParameters:
     """Build the dynamic-price surplus plus grid-charging BESS scenario."""
     return ScenarioParameters(
@@ -74,4 +79,5 @@ def make_dynamic_surplus_and_grid_charging_scenario(
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
         surplus_reserve_fraction=surplus_reserve_fraction,
+        grid_connection_limit_kw=grid_connection_limit_kw,
     )
