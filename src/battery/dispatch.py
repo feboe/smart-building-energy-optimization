@@ -64,7 +64,7 @@ def validate_dispatch_results(
     expected_row_count: int | None = None,
     tolerance: float = 1e-6,
 ) -> None:
-    """Validate basic physical bounds for a dispatch result."""
+    """Validate physical feasibility for a dispatch result."""
     missing_columns = sorted(set(DISPATCH_COLUMNS) - set(dispatch_df.columns))
     if missing_columns:
         raise ValueError(f"Missing dispatch columns: {missing_columns}")
@@ -104,11 +104,63 @@ def validate_dispatch_results(
         if (dispatch_df[column] < -tolerance).any():
             raise ValueError(f"{column} contains negative values.")
 
+    if (dispatch_df["soc_start_kwh"] < battery.min_soc_kwh - tolerance).any():
+        raise ValueError("SOC start falls below the configured minimum.")
+
     if (dispatch_df["soc_end_kwh"] < battery.min_soc_kwh - tolerance).any():
-        raise ValueError("SOC falls below the configured minimum.")
+        raise ValueError("SOC end falls below the configured minimum.")
+
+    if (dispatch_df["soc_start_kwh"] > battery.max_soc_kwh + tolerance).any():
+        raise ValueError("SOC start exceeds the configured maximum.")
 
     if (dispatch_df["soc_end_kwh"] > battery.max_soc_kwh + tolerance).any():
-        raise ValueError("SOC exceeds the configured maximum.")
+        raise ValueError("SOC end exceeds the configured maximum.")
+
+    battery_charge_error = (
+        dispatch_df["battery_charge_kwh"]
+        - dispatch_df["charge_from_surplus_kwh"]
+        - dispatch_df["charge_from_grid_kwh"]
+    ).abs()
+    if (battery_charge_error > tolerance).any():
+        raise ValueError("Battery charge does not match charge components.")
+
+    if (
+        dispatch_df["battery_charge_kwh"]
+        > battery.max_charge_power_kw + tolerance
+    ).any():
+        raise ValueError("Battery charge exceeds the configured power limit.")
+
+    if (
+        dispatch_df["discharge_to_load_kwh"]
+        > battery.max_discharge_power_kw + tolerance
+    ).any():
+        raise ValueError("Battery discharge exceeds the configured power limit.")
+
+    if (
+        dispatch_df["charge_from_surplus_kwh"]
+        > dispatch_df["available_surplus_kwh"] + tolerance
+    ).any():
+        raise ValueError("Battery charges more surplus than available.")
+
+    if (
+        dispatch_df["discharge_to_load_kwh"]
+        > dispatch_df["demand_after_generation_kwh"] + tolerance
+    ).any():
+        raise ValueError("Battery discharges more energy than remaining demand.")
+
+    simultaneous_charge_discharge = (
+        dispatch_df["battery_charge_kwh"] > tolerance
+    ) & (dispatch_df["discharge_to_load_kwh"] > tolerance)
+    if simultaneous_charge_discharge.any():
+        raise ValueError("Battery charges and discharges in the same timestep.")
+
+    export_balance_error = (
+        dispatch_df["grid_export_kwh"]
+        - dispatch_df["available_surplus_kwh"]
+        + dispatch_df["charge_from_surplus_kwh"]
+    ).abs()
+    if (export_balance_error > tolerance).any():
+        raise ValueError("Grid export is not equal to leftover local surplus.")
 
     energy_balance_error = (
         dispatch_df["local_generation_kwh"]
