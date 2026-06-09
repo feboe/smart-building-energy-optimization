@@ -1,5 +1,7 @@
 """Shared dispatch helpers and validation for BESS simulations."""
 
+import math
+
 import pandas as pd
 
 from src.battery.parameters import BatteryParameters
@@ -81,6 +83,23 @@ def validate_dispatch_results(
         "grid_import_kwh",
         "grid_export_kwh",
     ]
+    finite_columns = [
+        "gross_load_kwh",
+        "local_generation_kwh",
+        "available_surplus_kwh",
+        "demand_after_generation_kwh",
+        "grid_charge_soc_limit_kwh",
+        "dynamic_import_price_eur_per_kwh",
+        *nonnegative_columns,
+        "soc_start_kwh",
+        "soc_end_kwh",
+    ]
+    for column in finite_columns:
+        numeric_values = pd.to_numeric(dispatch_df[column], errors="coerce")
+        is_finite = numeric_values.map(math.isfinite)
+        if (~is_finite).any():
+            raise ValueError(f"{column} contains non-finite values.")
+
     for column in nonnegative_columns:
         if (dispatch_df[column] < -tolerance).any():
             raise ValueError(f"{column} contains negative values.")

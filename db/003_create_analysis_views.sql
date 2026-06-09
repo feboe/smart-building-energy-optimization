@@ -49,7 +49,27 @@ electricity_p_load AS (
         pv_w_raw,
         pv_w,
         chp_w,
-        total_w - COALESCE(pv_w, 0) - COALESCE(chp_w, 0) AS gross_load_w
+        CASE
+            WHEN pv_w < 0 THEN -pv_w
+            WHEN pv_w >= 0 THEN 0
+            ELSE NULL
+        END AS pv_generation_w,
+        CASE
+            WHEN chp_w < 0 THEN -chp_w
+            WHEN chp_w >= 0 THEN 0
+            ELSE NULL
+        END AS chp_generation_w,
+        total_w
+        + CASE
+            WHEN pv_w < 0 THEN -pv_w
+            WHEN pv_w >= 0 THEN 0
+            ELSE NULL
+        END
+        + CASE
+            WHEN chp_w < 0 THEN -chp_w
+            WHEN chp_w >= 0 THEN 0
+            ELSE NULL
+        END AS gross_load_w
     FROM electricity_p_cleaned
 ),
 day_ahead_prices AS (
@@ -74,25 +94,21 @@ SELECT
     load.total_w / 1000 AS grid_energy_kwh,
     CASE
         WHEN load.total_w > 0 THEN load.total_w / 1000
-        ELSE 0
+        WHEN load.total_w <= 0 THEN 0
+        ELSE NULL
     END AS grid_import_kwh,
     CASE
         WHEN load.total_w < 0 THEN -load.total_w / 1000
-        ELSE 0
+        WHEN load.total_w >= 0 THEN 0
+        ELSE NULL
     END AS grid_export_kwh,
     load.gross_load_w / 1000 AS gross_load_kwh,
-    CASE
-        WHEN load.pv_w < 0 THEN -load.pv_w / 1000
-        ELSE 0
-    END AS pv_generation_kwh,
-    CASE
-        WHEN load.chp_w < 0 THEN -load.chp_w / 1000
-        ELSE 0
-    END AS chp_generation_kwh,
+    load.pv_generation_w / 1000 AS pv_generation_kwh,
+    load.chp_generation_w / 1000 AS chp_generation_kwh,
     prices.day_ahead_price_eur_per_mwh,
     prices.day_ahead_price_eur_per_mwh / 1000 AS day_ahead_price_eur_per_kwh,
     load.pv_w_raw,
-    load.pv_w_raw IS NOT NULL AND load.pv_w_raw <> load.pv_w AS pv_w_was_cleaned
+    load.pv_w_raw IS DISTINCT FROM load.pv_w AS pv_w_was_cleaned
 FROM electricity_p_load load
 LEFT JOIN day_ahead_prices prices
     ON prices.observation_timestamp = load.observation_timestamp
@@ -126,6 +142,8 @@ SELECT
     total_w,
     pv_w,
     chp_w,
+    pv_w_raw,
+    pv_w_was_cleaned,
     gross_load_kwh,
     grid_energy_kwh,
     grid_import_kwh,

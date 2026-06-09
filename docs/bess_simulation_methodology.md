@@ -12,24 +12,41 @@ calendar year 2021.
 
 Relevant input columns:
 
+- `total_w`: signed net grid power from the smart-company data
+- `pv_w`: signed PV power after upstream cleaning
+- `chp_w`: signed CHP power
 - `gross_load_kwh`: building demand
 - `pv_generation_kwh`: clipped positive PV generation
 - `chp_generation_kwh`: clipped positive CHP generation
+- `grid_energy_kwh`: signed baseline grid energy
 - `grid_import_kwh`: baseline grid import without battery
 - `grid_export_kwh`: baseline grid export without battery
 - `day_ahead_price_eur_per_kwh`: dynamic market price signal
 - `local_timestamp`, `local_month`, `local_hour`, `local_isodow`
 
-Raw signed values are used upstream to reconstruct building demand. The battery
-simulation uses the clipped nonnegative generation and grid-flow columns because
-they represent physical generation, import, and export flows.
+The BESS simulation reconstructs the physical energy balance from signed grid
+power and clipped nonnegative generation:
+
+```text
+grid_energy_kwh = total_w / 1000
+pv_generation_kwh = max(-pv_w / 1000, 0)
+chp_generation_kwh = max(-chp_w / 1000, 0)
+gross_load_kwh = grid_energy_kwh + pv_generation_kwh + chp_generation_kwh
+grid_import_kwh = max(grid_energy_kwh, 0)
+grid_export_kwh = max(-grid_energy_kwh, 0)
+```
+
+With this convention, small positive PV or CHP auxiliary consumption stays
+inside the building load through the signed net grid energy. Only negative PV
+and CHP values are treated as usable local generation.
 
 ## Scenarios
 
 ### Baseline: No BESS
 
 - No battery is used.
-- Baseline grid import and export come directly from `smart_company_analysis`.
+- Baseline grid import and export are reconstructed from signed net grid energy
+  in `smart_company_analysis`.
 - The baseline is evaluated under both dynamic and fixed import pricing.
 - This case is the reference for all BESS scenarios.
 
@@ -83,6 +100,15 @@ The model separates market prices, import markup, and export compensation:
 - `fixed_import_price = mean(dynamic_import_price)`
 - `export_price = scenario parameter`
 
+The day-ahead price comes from SMARD chart data:
+
+- series: day-ahead price
+- SMARD filter id: `4169`
+- market region: `DE-LU`
+- resolution: hourly
+- database unit: EUR/MWh
+- simulation unit: EUR/kWh, converted as `EUR/MWh / 1000`
+
 In the first version, no additional import markup or export compensation is
 included:
 
@@ -90,6 +116,15 @@ included:
 - `export_price = 0`
 
 Later sensitivity runs can test fixed export prices such as 4, 6, or 8 ct/kWh.
+
+The active heuristic notebook currently uses one sensitivity case:
+
+- `import_markup = 0.115 EUR/kWh`
+- `export_price = 0.08 EUR/kWh`
+- `degradation_cost = 0.03 EUR/kWh discharged`
+
+These values are notebook assumptions for the first heuristic comparison, not
+the zero-markup and zero-export base defaults.
 
 ## Battery Assumptions
 
@@ -104,6 +139,7 @@ The first simulation uses the following battery parameter set:
 - `eta_charge = 0.95`
 - `eta_discharge = 0.95`
 - `degradation_cost_eur_per_kwh = 0`
+- `grid_connection_limit_kw = 500` for the grid-charging scenario
 - battery only discharges to load
 
 The first version does not model detailed battery aging. Instead, it can add a
@@ -123,6 +159,7 @@ The following effects are still neglected in version 1:
 - forecast error
 - export from battery to grid
 - hard binary charge/discharge mode
+- load shedding when natural building import exceeds the grid connection limit
 
 The first LP model may allow simultaneous charge and discharge in theory. With
 efficiency losses this should usually be uneconomic. If simultaneous charge and
@@ -176,6 +213,9 @@ Important constraints:
 - `charge_from_surplus <= available_surplus`.
 - In the surplus-only case: `charge_from_grid = 0`.
 - Battery discharge only serves load.
+- In grid-charging cases, additional grid charging is limited so total grid
+  import stays below the configured connection limit whenever the natural
+  building deficit is already below that limit.
 
 The optimization objective minimizes net electricity cost. The effective cost
 per load kWh is calculated after optimization:
@@ -209,6 +249,8 @@ The dynamic-price heuristic uses rolling-horizon price thresholds:
   known horizon prices, only in the grid-charging scenario
 - in the grid-charging scenario, reserve battery headroom for expected future
   surplus generation inside the rolling horizon before charging from the grid
+- in the grid-charging scenario, cap extra grid charging by the configured grid
+  connection limit
 - export remaining surplus only when the battery is full or charge power is
   limited
 
@@ -240,3 +282,4 @@ Additional metrics:
 - approximate cycles
 - self-consumption increase
 - peak grid import
+- grid connection limit
