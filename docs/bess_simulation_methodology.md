@@ -103,12 +103,23 @@ The first simulation uses the following battery parameter set:
 - `max_soc = 100% * capacity_kwh`
 - `eta_charge = 0.95`
 - `eta_discharge = 0.95`
+- `degradation_cost_eur_per_kwh = 0`
 - battery only discharges to load
 
-The following effects are neglected in version 1:
+The first version does not model detailed battery aging. Instead, it can add a
+simple discharged-throughput cost as a degradation proxy:
 
-- battery degradation
-- cycle costs
+```text
+battery_degradation_cost = battery_discharge_throughput_kwh
+    * degradation_cost_eur_per_kwh
+```
+
+The default degradation cost is `0 EUR/kWh`, so the proxy does not affect the
+baseline results unless a positive value is configured.
+
+The following effects are still neglected in version 1:
+
+- detailed battery degradation
 - forecast error
 - export from battery to grid
 - hard binary charge/discharge mode
@@ -219,6 +230,10 @@ Primary metric:
 Additional metrics:
 
 - total net electricity cost
+- grid import cost
+- grid export revenue
+- electricity net cost before degradation proxy
+- battery degradation cost
 - total grid import
 - total grid export
 - battery throughput

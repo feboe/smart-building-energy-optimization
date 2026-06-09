@@ -33,17 +33,16 @@ def calculate_baseline_metrics(
     grid_import_kwh = float(prepared_df["grid_import_kwh"].sum())
     grid_export_kwh = float(prepared_df["grid_export_kwh"].sum())
 
-    dynamic_net_cost_eur = float(
+    dynamic_grid_import_cost_eur = float(
         (
             prepared_df["grid_import_kwh"]
             * prepared_df["dynamic_import_price_eur_per_kwh"]
         ).sum()
-        - grid_export_kwh * scenario.export_price_eur_per_kwh
     )
-    fixed_net_cost_eur = (
-        grid_import_kwh * fixed_price
-        - grid_export_kwh * scenario.export_price_eur_per_kwh
-    )
+    fixed_grid_import_cost_eur = grid_import_kwh * fixed_price
+    grid_export_revenue_eur = grid_export_kwh * scenario.export_price_eur_per_kwh
+    dynamic_net_cost_eur = dynamic_grid_import_cost_eur - grid_export_revenue_eur
+    fixed_net_cost_eur = fixed_grid_import_cost_eur - grid_export_revenue_eur
     self_consumption_ratio = (
         1 - grid_export_kwh / total_generation_kwh
         if total_generation_kwh > 0
@@ -51,6 +50,9 @@ def calculate_baseline_metrics(
     )
 
     return {
+        "baseline_dynamic_grid_import_cost_eur": dynamic_grid_import_cost_eur,
+        "baseline_fixed_grid_import_cost_eur": fixed_grid_import_cost_eur,
+        "baseline_grid_export_revenue_eur": grid_export_revenue_eur,
         "baseline_dynamic_net_cost_eur": dynamic_net_cost_eur,
         "baseline_fixed_net_cost_eur": fixed_net_cost_eur,
         "baseline_dynamic_effective_cost_eur_per_load_kwh": (
@@ -88,17 +90,16 @@ def calculate_dispatch_metrics(
     grid_import_kwh = float(dispatch_df["grid_import_kwh"].sum())
     grid_export_kwh = float(dispatch_df["grid_export_kwh"].sum())
 
-    dynamic_net_cost_eur = float(
+    dynamic_grid_import_cost_eur = float(
         (
             dispatch_df["grid_import_kwh"].reset_index(drop=True)
             * prepared_df["dynamic_import_price_eur_per_kwh"].reset_index(drop=True)
         ).sum()
-        - grid_export_kwh * scenario.export_price_eur_per_kwh
     )
-    fixed_net_cost_eur = (
-        grid_import_kwh * fixed_price
-        - grid_export_kwh * scenario.export_price_eur_per_kwh
-    )
+    fixed_grid_import_cost_eur = grid_import_kwh * fixed_price
+    grid_export_revenue_eur = grid_export_kwh * scenario.export_price_eur_per_kwh
+    dynamic_net_cost_eur = dynamic_grid_import_cost_eur - grid_export_revenue_eur
+    fixed_net_cost_eur = fixed_grid_import_cost_eur - grid_export_revenue_eur
     self_consumption_ratio = (
         1 - grid_export_kwh / total_generation_kwh
         if total_generation_kwh > 0
@@ -107,15 +108,22 @@ def calculate_dispatch_metrics(
     baseline = calculate_baseline_metrics(analysis_df, scenario)
 
     discharge_throughput_kwh = float(dispatch_df["discharge_to_load_kwh"].sum())
+    battery_degradation_cost_eur = (
+        discharge_throughput_kwh * battery.degradation_cost_eur_per_kwh
+    )
 
     if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
         price_model = "fixed"
-        net_cost_eur = fixed_net_cost_eur
+        grid_import_cost_eur = fixed_grid_import_cost_eur
+        electricity_net_cost_eur = fixed_net_cost_eur
         baseline_net_cost_eur = baseline["baseline_fixed_net_cost_eur"]
     else:
         price_model = "dynamic"
-        net_cost_eur = dynamic_net_cost_eur
+        grid_import_cost_eur = dynamic_grid_import_cost_eur
+        electricity_net_cost_eur = dynamic_net_cost_eur
         baseline_net_cost_eur = baseline["baseline_dynamic_net_cost_eur"]
+
+    net_cost_eur = electricity_net_cost_eur + battery_degradation_cost_eur
 
     return {
         "scenario": scenario.name,
@@ -123,6 +131,11 @@ def calculate_dispatch_metrics(
         "price_model": price_model,
         "capacity_kwh": battery.capacity_kwh,
         "c_rate": battery.c_rate,
+        "degradation_cost_eur_per_kwh": battery.degradation_cost_eur_per_kwh,
+        "grid_import_cost_eur": grid_import_cost_eur,
+        "grid_export_revenue_eur": grid_export_revenue_eur,
+        "electricity_net_cost_eur": electricity_net_cost_eur,
+        "battery_degradation_cost_eur": battery_degradation_cost_eur,
         "net_cost_eur": net_cost_eur,
         "effective_cost_eur_per_load_kwh": net_cost_eur / total_load_kwh,
         "cost_savings_eur": baseline_net_cost_eur - net_cost_eur,

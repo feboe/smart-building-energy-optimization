@@ -23,6 +23,7 @@ class BatteryParameters:
     max_soc_fraction: float = 1.00
     eta_charge: float = 0.95
     eta_discharge: float = 0.95
+    degradation_cost_eur_per_kwh: float = 0.0
 
     def __post_init__(self) -> None:
         if self.capacity_kwh <= 0:
@@ -38,6 +39,11 @@ class BatteryParameters:
         if not 0 < self.eta_discharge <= 1:
             raise ValueError(
                 "eta_discharge must satisfy 0 < eta_discharge <= 1."
+            )
+        if self.degradation_cost_eur_per_kwh < 0:
+            raise ValueError(
+                "degradation_cost_eur_per_kwh must be greater than or equal "
+                "to zero."
             )
 
     @property
