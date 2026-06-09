@@ -73,6 +73,7 @@ class ScenarioParameters:
     low_price_quantile: float = 0.25
     high_price_quantile: float = 0.75
     fixed_import_price_eur_per_kwh: float | None = None
+    surplus_reserve_fraction: float = 1.0
 
     def __post_init__(self) -> None:
         if self.dispatch_strategy not in VALID_DISPATCH_STRATEGIES:
@@ -91,3 +92,5 @@ class ScenarioParameters:
                 "low_price_quantile must be lower than or equal to "
                 "high_price_quantile."
             )
+        if not 0 <= self.surplus_reserve_fraction <= 1:
+            raise ValueError("surplus_reserve_fraction must be between 0 and 1.")

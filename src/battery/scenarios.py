@@ -62,6 +62,7 @@ def make_dynamic_surplus_and_grid_charging_scenario(
     export_price_eur_per_kwh: float = 0.0,
     import_markup_eur_per_kwh: float = 0.0,
     horizon_hours: int = 24,
+    surplus_reserve_fraction: float = 1.0,
 ) -> ScenarioParameters:
     """Build the dynamic-price surplus plus grid-charging BESS scenario."""
     return ScenarioParameters(
@@ -70,4 +71,5 @@ def make_dynamic_surplus_and_grid_charging_scenario(
         horizon_hours=horizon_hours,
         import_markup_eur_per_kwh=import_markup_eur_per_kwh,
         export_price_eur_per_kwh=export_price_eur_per_kwh,
+        surplus_reserve_fraction=surplus_reserve_fraction,
     )

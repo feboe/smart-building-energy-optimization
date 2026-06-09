@@ -37,6 +37,7 @@ def run_heuristic_dispatch(
             always_discharge=True,
             allow_grid_charging=False,
             use_price_thresholds=False,
+            reserve_future_surplus=False,
         )
 
     if scenario.dispatch_strategy == DYNAMIC_SURPLUS_ONLY:
@@ -48,6 +49,7 @@ def run_heuristic_dispatch(
             always_discharge=False,
             allow_grid_charging=False,
             use_price_thresholds=True,
+            reserve_future_surplus=False,
         )
 
     if scenario.dispatch_strategy == DYNAMIC_SURPLUS_GRID_CHARGING:
@@ -59,6 +61,7 @@ def run_heuristic_dispatch(
             always_discharge=False,
             allow_grid_charging=True,
             use_price_thresholds=True,
+            reserve_future_surplus=True,
         )
 
     raise ValueError(f"Unknown dispatch strategy: {scenario.dispatch_strategy}")
@@ -84,6 +87,7 @@ def _run_dispatch_loop(
     always_discharge: bool,
     allow_grid_charging: bool,
     use_price_thresholds: bool,
+    reserve_future_surplus: bool,
 ) -> pd.DataFrame:
     records = []
     soc_kwh = initial_soc_kwh
@@ -111,6 +115,17 @@ def _run_dispatch_loop(
         available_surplus_kwh = float(row["available_surplus_kwh"])
         demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
         charge_power_remaining_kwh = battery.max_charge_power_kw
+        (
+            future_surplus_kwh,
+            reserved_surplus_headroom_kwh,
+            grid_charge_soc_limit_kwh,
+        ) = _future_surplus_reserve(
+            prepared_df=prepared_df,
+            index=index,
+            battery=battery,
+            scenario=scenario,
+            reserve_future_surplus=reserve_future_surplus,
+        )
 
         charge_limit_kwh = min(
             max_charge_input_kwh(soc_kwh, battery),
@@ -142,9 +157,14 @@ def _run_dispatch_loop(
             and is_low_price
             and charge_power_remaining_kwh > 0
         ):
+            reserve_limited_charge_kwh = max(
+                grid_charge_soc_limit_kwh - soc_kwh,
+                0,
+            ) / battery.eta_charge
             charge_from_grid_kwh = min(
                 max_charge_input_kwh(soc_kwh, battery),
                 charge_power_remaining_kwh,
+                reserve_limited_charge_kwh,
             )
             soc_kwh += charge_from_grid_kwh * battery.eta_charge
 
@@ -160,6 +180,9 @@ def _run_dispatch_loop(
                 "local_generation_kwh": row["local_generation_kwh"],
                 "available_surplus_kwh": available_surplus_kwh,
                 "demand_after_generation_kwh": demand_after_generation_kwh,
+                "future_surplus_kwh": future_surplus_kwh,
+                "reserved_surplus_headroom_kwh": reserved_surplus_headroom_kwh,
+                "grid_charge_soc_limit_kwh": grid_charge_soc_limit_kwh,
                 "dynamic_import_price_eur_per_kwh": current_price,
                 "low_price_threshold_eur_per_kwh": low_price_threshold,
                 "high_price_threshold_eur_per_kwh": high_price_threshold,
@@ -183,3 +206,36 @@ def _run_dispatch_loop(
         expected_row_count=len(prepared_df),
     )
     return dispatch_df
+
+
+def _future_surplus_reserve(
+    prepared_df: pd.DataFrame,
+    index: int,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+    reserve_future_surplus: bool,
+) -> tuple[float, float, float]:
+    if not reserve_future_surplus:
+        return float("nan"), float("nan"), battery.max_soc_kwh
+
+    horizon_surplus = prepared_df["available_surplus_kwh"].iloc[
+        index + 1 : index + scenario.horizon_hours
+    ]
+    future_surplus_kwh = float(horizon_surplus.sum())
+    usable_capacity_kwh = battery.max_soc_kwh - battery.min_soc_kwh
+    reserved_surplus_headroom_kwh = min(
+        future_surplus_kwh
+        * battery.eta_charge
+        * scenario.surplus_reserve_fraction,
+        usable_capacity_kwh,
+    )
+    grid_charge_soc_limit_kwh = max(
+        battery.max_soc_kwh - reserved_surplus_headroom_kwh,
+        battery.min_soc_kwh,
+    )
+
+    return (
+        future_surplus_kwh,
+        reserved_surplus_headroom_kwh,
+        grid_charge_soc_limit_kwh,
+    )

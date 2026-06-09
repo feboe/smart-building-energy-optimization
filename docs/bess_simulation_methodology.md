@@ -196,11 +196,19 @@ The dynamic-price heuristic uses rolling-horizon price thresholds:
   horizon prices
 - charge from grid when price is less than or equal to the 25th percentile of
   known horizon prices, only in the grid-charging scenario
+- in the grid-charging scenario, reserve battery headroom for expected future
+  surplus generation inside the rolling horizon before charging from the grid
 - export remaining surplus only when the battery is full or charge power is
   limited
 
 The percentile thresholds are calculated from the known rolling horizon, not
 from the full year.
+
+The future-surplus reservation is deliberately conservative in the first
+heuristic version. It considers expected surplus later in the current rolling
+horizon and limits grid charging so this surplus can still be stored. It does
+not model possible discharge before the future surplus occurs; that planning
+logic is left to the later optimization layer.
 
 ## Evaluation Metrics
 
