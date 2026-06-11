@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 import sys
 from time import perf_counter
@@ -27,6 +30,7 @@ from src.battery.scenarios import (
 
 EXPERIMENT_NAME = "capacity_sensitivity"
 CAPACITIES_KWH = [250, 500, 1000, 2000]
+MAX_PARALLEL_WORKERS = min(4, os.cpu_count() or 1)
 RESULTS_PATH = PROJECT_ROOT / "results" / "bess_experiment_results.csv"
 
 C_RATE = 0.5
@@ -62,12 +66,18 @@ METADATA_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class _DispatchJob:
+    capacity_kwh: float
+    scenario: ScenarioParameters
+
+
 def main() -> None:
     run_timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     script_start_time = perf_counter()
     print("Loading smart-company analysis data...")
     analysis_df = load_smart_company_analysis()
-    # analysis_df = analysis_df.head(500)  # Limit rows for faster experimentation
+    analysis_df = analysis_df.head(500)  # Limit rows for faster experimentation
     print(f"Loaded {len(analysis_df):,} rows.")
 
     results_df = run_capacity_sensitivity(
@@ -86,6 +96,7 @@ def run_capacity_sensitivity(
     analysis_df: pd.DataFrame,
     capacities_kwh: list[float] | None = None,
     run_timestamp: str | None = None,
+    max_workers: int | None = None,
 ) -> pd.DataFrame:
     """Run baseline, heuristic, and LP experiments for the configured capacities."""
     capacities = CAPACITIES_KWH if capacities_kwh is None else capacities_kwh
@@ -103,61 +114,19 @@ def run_capacity_sensitivity(
         run_timestamp=timestamp,
     )
 
-    for capacity_kwh in capacities:
-        print(f"Running capacity {capacity_kwh:g} kWh...")
-        battery = _make_battery(capacity_kwh)
-        scenarios = _make_scenarios()
-
-        for scenario in scenarios:
-            print(f"  heuristic: {scenario.name}")
-            start_time = perf_counter()
-            heuristic_dispatch_df = run_heuristic_dispatch(
+    jobs = _dispatch_jobs(capacities)
+    worker_count = _resolve_max_workers(max_workers, len(jobs))
+    if jobs and worker_count == 1:
+        rows.extend(_run_dispatch_jobs_serial(analysis_df, jobs, timestamp))
+    elif jobs:
+        rows.extend(
+            _run_dispatch_jobs_parallel(
                 analysis_df=analysis_df,
-                battery=battery,
-                scenario=scenario,
+                jobs=jobs,
+                run_timestamp=timestamp,
+                max_workers=worker_count,
             )
-            heuristic_metrics = calculate_dispatch_metrics(
-                analysis_df=analysis_df,
-                dispatch_df=heuristic_dispatch_df,
-                battery=battery,
-                scenario=scenario,
-            )
-            elapsed_seconds = perf_counter() - start_time
-            rows.append(
-                _with_metadata(
-                    row=heuristic_metrics,
-                    method="heuristic",
-                    scenario=scenario,
-                    run_timestamp=timestamp,
-                    elapsed_seconds=elapsed_seconds,
-                )
-            )
-            print(f"    elapsed: {elapsed_seconds:.2f} seconds")
-
-            print(f"  lp_optimization: {scenario.name}")
-            start_time = perf_counter()
-            optimized_dispatch_df = run_optimized_dispatch(
-                analysis_df=analysis_df,
-                battery=battery,
-                scenario=scenario,
-            )
-            optimized_metrics = calculate_dispatch_metrics(
-                analysis_df=analysis_df,
-                dispatch_df=optimized_dispatch_df,
-                battery=battery,
-                scenario=scenario,
-            )
-            elapsed_seconds = perf_counter() - start_time
-            rows.append(
-                _with_metadata(
-                    row=optimized_metrics,
-                    method="lp_optimization",
-                    scenario=scenario,
-                    run_timestamp=timestamp,
-                    elapsed_seconds=elapsed_seconds,
-                )
-            )
-            print(f"    elapsed: {elapsed_seconds:.2f} seconds")
+        )
 
     results_df = pd.DataFrame(rows)
     results_df = results_df.sort_values(
@@ -168,6 +137,134 @@ def run_capacity_sensitivity(
         column for column in results_df.columns if column not in METADATA_COLUMNS
     ]
     return results_df[ordered_columns]
+
+
+def _dispatch_jobs(capacities_kwh: list[float]) -> list[_DispatchJob]:
+    return [
+        _DispatchJob(capacity_kwh=capacity_kwh, scenario=scenario)
+        for capacity_kwh in capacities_kwh
+        for scenario in _make_scenarios()
+    ]
+
+
+def _resolve_max_workers(max_workers: int | None, job_count: int) -> int:
+    if job_count <= 0:
+        return 1
+    if max_workers is None:
+        resolved_workers = MAX_PARALLEL_WORKERS
+    else:
+        if max_workers <= 0:
+            raise ValueError("max_workers must be greater than zero.")
+        resolved_workers = max_workers
+    return min(resolved_workers, job_count)
+
+
+def _run_dispatch_jobs_serial(
+    analysis_df: pd.DataFrame,
+    jobs: list[_DispatchJob],
+    run_timestamp: str,
+) -> list[dict]:
+    rows = []
+    for job in jobs:
+        print(f"Running capacity {job.capacity_kwh:g} kWh, {job.scenario.name}...")
+        job_rows = _run_dispatch_job(
+            analysis_df=analysis_df,
+            job=job,
+            run_timestamp=run_timestamp,
+        )
+        rows.extend(job_rows)
+        _print_job_completion(job, job_rows)
+    return rows
+
+
+def _run_dispatch_jobs_parallel(
+    analysis_df: pd.DataFrame,
+    jobs: list[_DispatchJob],
+    run_timestamp: str,
+    max_workers: int,
+) -> list[dict]:
+    print(f"Running {len(jobs)} capacity-scenario jobs with {max_workers} workers...")
+    rows = []
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        future_to_job = {
+            executor.submit(
+                _run_dispatch_job,
+                analysis_df=analysis_df,
+                job=job,
+                run_timestamp=run_timestamp,
+            ): job
+            for job in jobs
+        }
+        for future in as_completed(future_to_job):
+            job = future_to_job[future]
+            job_rows = future.result()
+            rows.extend(job_rows)
+            _print_job_completion(job, job_rows)
+    return rows
+
+
+def _run_dispatch_job(
+    analysis_df: pd.DataFrame,
+    job: _DispatchJob,
+    run_timestamp: str,
+) -> list[dict]:
+    battery = _make_battery(job.capacity_kwh)
+    scenario = job.scenario
+    rows = []
+
+    start_time = perf_counter()
+    heuristic_dispatch_df = run_heuristic_dispatch(
+        analysis_df=analysis_df,
+        battery=battery,
+        scenario=scenario,
+    )
+    heuristic_metrics = calculate_dispatch_metrics(
+        analysis_df=analysis_df,
+        dispatch_df=heuristic_dispatch_df,
+        battery=battery,
+        scenario=scenario,
+    )
+    rows.append(
+        _with_metadata(
+            row=heuristic_metrics,
+            method="heuristic",
+            scenario=scenario,
+            run_timestamp=run_timestamp,
+            elapsed_seconds=perf_counter() - start_time,
+        )
+    )
+
+    start_time = perf_counter()
+    optimized_dispatch_df = run_optimized_dispatch(
+        analysis_df=analysis_df,
+        battery=battery,
+        scenario=scenario,
+    )
+    optimized_metrics = calculate_dispatch_metrics(
+        analysis_df=analysis_df,
+        dispatch_df=optimized_dispatch_df,
+        battery=battery,
+        scenario=scenario,
+    )
+    rows.append(
+        _with_metadata(
+            row=optimized_metrics,
+            method="lp_optimization",
+            scenario=scenario,
+            run_timestamp=run_timestamp,
+            elapsed_seconds=perf_counter() - start_time,
+        )
+    )
+    return rows
+
+
+def _print_job_completion(job: _DispatchJob, rows: list[dict]) -> None:
+    elapsed_by_method = {row["method"]: row["elapsed_seconds"] for row in rows}
+    print(
+        f"Completed capacity {job.capacity_kwh:g} kWh, {job.scenario.name}: "
+        f"heuristic {elapsed_by_method['heuristic']:.2f}s, "
+        f"lp_optimization {elapsed_by_method['lp_optimization']:.2f}s"
+    )
 
 
 def _make_battery(capacity_kwh: float) -> BatteryParameters:
