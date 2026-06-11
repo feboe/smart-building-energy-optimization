@@ -1,285 +1,214 @@
 # BESS Simulation Methodology
 
-This document describes the first version of the battery energy storage system
-(BESS) simulation for the smart company energy data. The goal is to compare a
-no-battery baseline with simple battery dispatch strategies before introducing
-mathematical optimization.
+This document explains the battery energy storage system (BESS) simulation used
+in this project. The goal is to compare three levels of energy management:
 
-## Data Basis
+- a no-battery baseline
+- a transparent rule-based heuristic
+- a rolling-horizon linear optimization model
 
-The first simulation uses the `smart_company_analysis` view for the local
-calendar year 2021.
+The project is intentionally educational. It is not meant to be production EMS
+software. The focus is to build a physically consistent simulation foundation,
+then show how a mathematical optimizer can improve dispatch decisions under
+dynamic electricity prices.
 
-Relevant input columns:
+The heuristic controller is described in
+[`heuristic_dispatch.md`](heuristic_dispatch.md). The linear optimization model
+is described in [`lp_optimization.md`](lp_optimization.md).
 
-- `total_w`: signed net grid power from the smart-company data
-- `pv_w`: signed PV power after upstream cleaning
-- `chp_w`: signed CHP power
-- `gross_load_kwh`: building demand
-- `pv_generation_kwh`: clipped positive PV generation
-- `chp_generation_kwh`: clipped positive CHP generation
-- `grid_energy_kwh`: signed baseline grid energy
-- `grid_import_kwh`: baseline grid import without battery
-- `grid_export_kwh`: baseline grid export without battery
-- `day_ahead_price_eur_per_kwh`: dynamic market price signal
-- `local_timestamp`, `local_month`, `local_hour`, `local_isodow`
+## Energy Convention
 
-The BESS simulation reconstructs the physical energy balance from signed grid
-power and clipped nonnegative generation:
+The simulation uses hourly energy values. Power values from the analysis data
+are converted to kWh per hour.
+
+The source data contains signed net grid power and signed local generation
+signals. The BESS model reconstructs a clean hourly energy balance from those
+signals:
 
 ```text
 grid_energy_kwh = total_w / 1000
 pv_generation_kwh = max(-pv_w / 1000, 0)
 chp_generation_kwh = max(-chp_w / 1000, 0)
-gross_load_kwh = grid_energy_kwh + pv_generation_kwh + chp_generation_kwh
+local_generation_kwh = pv_generation_kwh + chp_generation_kwh
+gross_load_kwh = grid_energy_kwh + local_generation_kwh
 grid_import_kwh = max(grid_energy_kwh, 0)
 grid_export_kwh = max(-grid_energy_kwh, 0)
 ```
 
-With this convention, small positive PV or CHP auxiliary consumption stays
-inside the building load through the signed net grid energy. Only negative PV
-and CHP values are treated as usable local generation.
+With this convention, negative PV or CHP power is treated as usable local
+generation. Small positive PV or CHP auxiliary consumption remains part of the
+building load through the signed net grid value.
 
-## Scenarios
+The battery-facing quantities are:
 
-### Baseline: No BESS
+- `available_surplus_kwh`: local generation left after serving load
+- `demand_after_generation_kwh`: load left after local generation
+- `dynamic_import_price_eur_per_kwh`: day-ahead price plus import markup
 
-- No battery is used.
-- Baseline grid import and export are reconstructed from signed net grid energy
-  in `smart_company_analysis`.
-- The baseline is evaluated under both dynamic and fixed import pricing.
-- This case is the reference for all BESS scenarios.
+This gives the dispatch algorithms a simple view of each hour: either there is
+local surplus to store/export, or there is remaining demand to serve from the
+battery/grid.
 
-### 1. Surplus-Only BESS
+## Battery Model
 
-- Battery can only charge from local surplus.
-- Battery discharges to reduce grid import.
-- Grid charging is disabled.
-- This scenario mainly measures self-consumption value.
-- The surplus-only case is evaluated under both fixed and dynamic import
-  pricing.
-- Fixed-price surplus-only dispatch uses its own simple heuristic because every
-  avoided grid-import kWh has the same value.
+The battery is modeled with a small set of physical assumptions:
 
-### 2. Surplus + Grid-Charging BESS
+- energy capacity in kWh
+- minimum and maximum state of charge (SOC)
+- charge and discharge efficiency
+- C-rate based charge and discharge power limits
+- optional degradation proxy based on discharged throughput
 
-- Battery can charge from local surplus and from the grid.
-- Grid charging is allowed in low-price hours.
-- Battery discharges to reduce grid import in high-price/import hours.
-- This scenario measures self-consumption plus dynamic-price arbitrage.
-- The grid-charging case is evaluated only under dynamic import pricing.
-- Fixed-price grid charging is excluded from the main analysis because buying
-  grid energy and later using it at the same fixed price only adds storage
-  losses. It can be used as a sanity check, but not as a meaningful target case.
-
-The scenario structure follows the economic logic of the price models. With a
-fixed import price, the battery creates value by increasing local
-self-consumption. Charging from the grid only becomes meaningful when import
-prices vary over time.
-
-Target comparison structure:
-
-| Case | Fixed price | Dynamic price |
-| --- | --- | --- |
-| No BESS baseline | yes | yes |
-| Surplus-only BESS | yes | yes |
-| Surplus + grid-charging BESS | no | yes |
-
-For the active BESS cases, the project compares:
-
-- heuristic dispatch
-- LP optimization dispatch
-- multiple battery capacities
-- multiple export-price assumptions
-
-## Price Assumptions
-
-The model separates market prices, import markup, and export compensation:
-
-- `dynamic_import_price = day_ahead_price + import_markup`
-- `fixed_import_price = mean(dynamic_import_price)`
-- `export_price = scenario parameter`
-
-The day-ahead price comes from SMARD chart data:
-
-- series: day-ahead price
-- SMARD filter id: `4169`
-- market region: `DE-LU`
-- resolution: hourly
-- database unit: EUR/MWh
-- simulation unit: EUR/kWh, converted as `EUR/MWh / 1000`
-
-In the first version, no additional import markup or export compensation is
-included:
-
-- `import_markup = 0`
-- `export_price = 0`
-
-Later sensitivity runs can test fixed export prices such as 4, 6, or 8 ct/kWh.
-
-The active heuristic notebook currently uses one sensitivity case:
-
-- `import_markup = 0.115 EUR/kWh`
-- `export_price = 0.08 EUR/kWh`
-- `degradation_cost = 0.03 EUR/kWh discharged`
-
-These values are notebook assumptions for the first heuristic comparison, not
-the zero-markup and zero-export base defaults.
-
-## Battery Assumptions
-
-The first simulation uses the following battery parameter set:
-
-- `capacity_kwh`: `[250, 500, 1000, 2000]`
-- `c_rate`: `0.5` or `1.0`
-- `max_charge_power_kw = capacity_kwh * c_rate`
-- `max_discharge_power_kw = capacity_kwh * c_rate`
-- `min_soc = 10% * capacity_kwh`
-- `max_soc = 100% * capacity_kwh`
-- `eta_charge = 0.95`
-- `eta_discharge = 0.95`
-- `degradation_cost_eur_per_kwh = 0`
-- `grid_connection_limit_kw = 500` for the grid-charging scenario
-- battery only discharges to load
-
-The first version does not model detailed battery aging. Instead, it can add a
-simple discharged-throughput cost as a degradation proxy:
+The maximum charge and discharge power are derived from capacity and C-rate:
 
 ```text
-battery_degradation_cost = battery_discharge_throughput_kwh
-    * degradation_cost_eur_per_kwh
+max_charge_power_kw = capacity_kwh * c_rate
+max_discharge_power_kw = capacity_kwh * c_rate
 ```
 
-The default degradation cost is `0 EUR/kWh`, so the proxy does not affect the
-baseline results unless a positive value is configured.
+The SOC balance is:
 
-The following effects are still neglected in version 1:
+```text
+soc_end =
+    soc_start
+    + battery_charge_kwh * eta_charge
+    - discharge_to_load_kwh / eta_discharge
+```
 
-- detailed battery degradation
-- forecast error
-- export from battery to grid
-- hard binary charge/discharge mode
-- load shedding when natural building import exceeds the grid connection limit
+The battery only discharges to serve local load. It does not export stored
+energy to the grid. Grid export is therefore only leftover local surplus after
+the battery has charged from surplus.
 
-The first LP model may allow simultaneous charge and discharge in theory. With
-efficiency losses this should usually be uneconomic. If simultaneous charge and
-discharge becomes material in later optimization results, a MILP formulation can
-be introduced.
+The degradation model is deliberately simple:
 
-## Rolling Optimization
+```text
+battery_degradation_cost =
+    battery_discharge_throughput_kwh * degradation_cost_eur_per_kwh
+```
 
-The optimization uses a rolling 24-hour horizon with hourly control.
+This is not a detailed aging model. It is a cost proxy that discourages
+unnecessary cycling and makes price arbitrage more realistic.
 
-At each hour, the controller reads the current state of charge, builds a
-24-hour plan using known or assumed future load, generation, and prices,
-executes only the first-hour decision, and then advances by one hour.
+## Compared Scenarios
 
-Version 1 assumes perfect foresight as an idealized benchmark.
+### No-Battery Baseline
 
-## LP Model Foundation
+The baseline uses the reconstructed grid import and export without a battery.
+It is evaluated under both fixed and dynamic import prices. This is the
+reference for all BESS scenarios.
 
-Decision variables per hour:
+### Fixed Surplus-Only BESS
+
+The battery can only charge from local surplus. It discharges to reduce grid
+import whenever there is remaining demand. Grid charging is disabled.
+
+This case mainly measures the value of increasing self-consumption when every
+avoided grid-import kWh has the same fixed value.
+
+### Dynamic Surplus-Only BESS
+
+The battery still charges only from local surplus, but discharge timing uses a
+dynamic price signal. The battery is held for high-price hours instead of
+discharging into every deficit hour.
+
+This case shows how price-aware dispatch can change the value of the same local
+surplus energy.
+
+### Dynamic Surplus and Grid-Charging BESS
+
+The battery can charge from local surplus and from the grid. Grid charging is
+only meaningful when prices vary over time: the battery can buy energy in low
+price hours and use it to reduce import in high price hours.
+
+This scenario combines self-consumption with price arbitrage. It also includes
+a grid connection limit that caps extra grid charging when the building already
+has natural grid demand.
+
+## Dispatch Contract
+
+Both the heuristic and the LP optimizer return the same dispatch dataframe. This
+keeps metric calculation and validation independent of the control method.
+
+Important dispatch flows are:
 
 - `charge_from_surplus_kwh`
 - `charge_from_grid_kwh`
+- `battery_charge_kwh`
 - `discharge_to_load_kwh`
 - `grid_import_kwh`
 - `grid_export_kwh`
-- `soc_kwh`
+- `soc_start_kwh`
+- `soc_end_kwh`
 
-Core hourly balance:
+The shared validator enforces the physical contract:
 
-```text
-pv_generation
-+ chp_generation
-+ grid_import
-+ battery_discharge_to_load
-=
-building_load
-+ battery_charge
-+ grid_export
-```
+- required columns are present
+- flows are finite and nonnegative
+- SOC stays within bounds
+- battery charge equals its surplus and grid components
+- charge and discharge power limits are respected
+- the battery cannot charge from more surplus than available
+- the battery cannot discharge more than remaining demand
+- no simultaneous charge and discharge appears in the final dispatch output
+- grid export equals leftover local surplus
+- hourly energy balance and SOC balance are consistent
 
-with:
-
-```text
-battery_charge = charge_from_surplus + charge_from_grid
-```
-
-Important constraints:
-
-- SOC stays between minimum and maximum capacity.
-- Charge and discharge are limited by power limits.
-- `charge_from_surplus <= available_surplus`.
-- In the surplus-only case: `charge_from_grid = 0`.
-- Battery discharge only serves load.
-- In grid-charging cases, additional grid charging is limited so total grid
-  import stays below the configured connection limit whenever the natural
-  building deficit is already below that limit.
-
-The optimization objective minimizes net electricity cost. The effective cost
-per load kWh is calculated after optimization:
-
-```text
-effective_cost_per_load_kwh = net_cost / total_building_load_kwh
-```
-
-## Heuristic Baseline
-
-### Fixed-Price Surplus-Only Heuristic
-
-Because the fixed import price is constant, the battery does not need a price
-signal. The fixed-price surplus-only heuristic follows these rules:
-
-- charge from surplus first
-- discharge to serve load whenever there is a deficit and usable SOC is
-  available
-- never charge from the grid
-- export remaining surplus only when the battery is full or charge power is
-  limited
-
-### Dynamic-Price Heuristic
-
-The dynamic-price heuristic uses rolling-horizon price thresholds:
-
-- charge from surplus first
-- discharge when price is greater than or equal to the 75th percentile of known
-  horizon prices
-- charge from grid when price is less than or equal to the 25th percentile of
-  known horizon prices, only in the grid-charging scenario
-- in the grid-charging scenario, reserve battery headroom for expected future
-  surplus generation inside the rolling horizon before charging from the grid
-- in the grid-charging scenario, cap extra grid charging by the configured grid
-  connection limit
-- export remaining surplus only when the battery is full or charge power is
-  limited
-
-The percentile thresholds are calculated from the known rolling horizon, not
-from the full year.
-
-The future-surplus reservation is deliberately conservative in the first
-heuristic version. It considers expected surplus later in the current rolling
-horizon and limits grid charging so this surplus can still be stored. It does
-not model possible discharge before the future surplus occurs; that planning
-logic is left to the later optimization layer.
+This validation layer is useful because it checks both the simple heuristic and
+the optimization output against the same physical rules.
 
 ## Evaluation Metrics
 
-Primary metric:
+The main economic metric is net cost:
 
-- effective net cost per building load kWh
+```text
+net_cost =
+    grid_import_cost
+    - grid_export_revenue
+    + battery_degradation_cost
+```
 
-Additional metrics:
+The project also reports:
 
-- total net electricity cost
-- grid import cost
-- grid export revenue
-- electricity net cost before degradation proxy
-- battery degradation cost
-- total grid import
-- total grid export
-- battery throughput
-- approximate cycles
-- self-consumption increase
+- effective cost per building load kWh
+- cost savings compared with the no-battery baseline
+- total grid import and export
+- charge and discharge throughput
+- approximate full cycles
 - peak grid import
-- grid connection limit
+- self-consumption ratio and improvement
+
+Additional utilization metrics help explain whether a battery size is useful:
+
+- `soc_range_utilization`: how much of the usable SOC range is used
+- `surplus_capture_ratio`: share of available surplus stored by the battery
+- `grid_charge_share`: share of battery charging that came from the grid
+
+Dynamic price timing metrics help explain grid charging:
+
+- average grid charging price
+- average battery discharge price
+- efficiency and degradation adjusted arbitrage spread
+
+The arbitrage spread is only a proxy. The dispatch output does not track
+whether a discharged kWh originally came from surplus or from grid charging.
+
+## Scope and Limitations
+
+The model is intentionally simplified:
+
+- hourly timestep only
+- no forecast error
+- no quarter-hour market products
+- no battery export to grid
+- no detailed battery degradation model
+- no load shedding
+- no reactive power or voltage constraints
+- no hard binary charge/discharge mode in the LP formulation
+
+The LP optimizer uses perfect foresight inside each rolling horizon. That makes
+it a useful benchmark for learning and comparison, but not a complete
+representation of a real operational EMS.
+
+The value of the project is the clean comparison: a physically validated
+baseline, a transparent heuristic, and a mathematical optimization benchmark
+that all operate on the same dispatch contract.
