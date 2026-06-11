@@ -96,9 +96,9 @@ def test_dynamic_grid_charging_charges_from_grid_only_in_low_price_hours(
     grid_charge_rows = dispatch_df["charge_from_grid_kwh"] > 1e-6
     assert grid_charge_rows.any()
     assert dispatch_df.loc[grid_charge_rows, "is_low_price"].all()
-    assert dispatch_df.loc[~dispatch_df["is_low_price"], "charge_from_grid_kwh"].sum() == pytest.approx(
-        0.0
-    )
+    assert dispatch_df.loc[
+        ~dispatch_df["is_low_price"], "charge_from_grid_kwh"
+    ].sum() == pytest.approx(0.0)
 
 
 def test_dynamic_surplus_only_discharges_only_in_high_price_hours(
@@ -193,9 +193,7 @@ def test_future_surplus_headroom_limits_grid_charging(make_analysis_df) -> None:
     )
 
     assert dispatch_df.loc[0, "future_surplus_kwh"] == pytest.approx(40.0)
-    assert dispatch_df.loc[0, "reserved_surplus_headroom_kwh"] == pytest.approx(
-        40.0
-    )
+    assert dispatch_df.loc[0, "reserved_surplus_headroom_kwh"] == pytest.approx(40.0)
     assert dispatch_df.loc[0, "grid_charge_soc_limit_kwh"] == pytest.approx(60.0)
     assert dispatch_df.loc[0, "charge_from_grid_kwh"] == pytest.approx(60.0)
 
@@ -225,8 +223,6 @@ def test_zero_future_surplus_reserve_allows_full_grid_charging(
         ),
     )
 
-    assert dispatch_df.loc[0, "reserved_surplus_headroom_kwh"] == pytest.approx(
-        0.0
-    )
+    assert dispatch_df.loc[0, "reserved_surplus_headroom_kwh"] == pytest.approx(0.0)
     assert dispatch_df.loc[0, "grid_charge_soc_limit_kwh"] == pytest.approx(100.0)
     assert dispatch_df.loc[0, "charge_from_grid_kwh"] == pytest.approx(100.0)

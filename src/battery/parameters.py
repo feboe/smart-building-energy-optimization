@@ -32,19 +32,14 @@ class BatteryParameters:
         if self.c_rate <= 0:
             raise ValueError("c_rate must be greater than zero.")
         if not 0 <= self.min_soc_fraction <= self.max_soc_fraction <= 1:
-            raise ValueError(
-                "SOC fractions must satisfy 0 <= min <= max <= 1."
-            )
+            raise ValueError("SOC fractions must satisfy 0 <= min <= max <= 1.")
         if not 0 < self.eta_charge <= 1:
             raise ValueError("eta_charge must satisfy 0 < eta_charge <= 1.")
         if not 0 < self.eta_discharge <= 1:
-            raise ValueError(
-                "eta_discharge must satisfy 0 < eta_discharge <= 1."
-            )
+            raise ValueError("eta_discharge must satisfy 0 < eta_discharge <= 1.")
         if self.degradation_cost_eur_per_kwh < 0:
             raise ValueError(
-                "degradation_cost_eur_per_kwh must be greater than or equal "
-                "to zero."
+                "degradation_cost_eur_per_kwh must be greater than or equal " "to zero."
             )
 
     @property
@@ -77,8 +72,8 @@ class ScenarioParameters:
     horizon_hours: int = 24
     import_markup_eur_per_kwh: float = 0.0
     export_price_eur_per_kwh: float = 0.0
-    low_price_quantile: float = 0.25
-    high_price_quantile: float = 0.75
+    low_price_quantile: float = 0.2
+    high_price_quantile: float = 0.8
     fixed_import_price_eur_per_kwh: float | None = None
     surplus_reserve_fraction: float = 1.0
     grid_connection_limit_kw: float | None = None
@@ -106,6 +101,4 @@ class ScenarioParameters:
             not math.isfinite(self.grid_connection_limit_kw)
             or self.grid_connection_limit_kw <= 0
         ):
-            raise ValueError(
-                "grid_connection_limit_kw must be positive when configured."
-            )
+            raise ValueError("grid_connection_limit_kw must be positive when configured.")

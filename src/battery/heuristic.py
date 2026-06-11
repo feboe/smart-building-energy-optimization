@@ -71,9 +71,7 @@ def _initial_soc(
     initial_soc_kwh: float | None,
     battery: BatteryParameters,
 ) -> float:
-    soc_kwh = (
-        battery.min_soc_kwh if initial_soc_kwh is None else float(initial_soc_kwh)
-    )
+    soc_kwh = battery.min_soc_kwh if initial_soc_kwh is None else float(initial_soc_kwh)
     if not battery.min_soc_kwh <= soc_kwh <= battery.max_soc_kwh:
         raise ValueError("initial_soc_kwh must be within configured SOC limits.")
     return soc_kwh
@@ -137,9 +135,8 @@ def _run_dispatch_loop(
         remaining_surplus_kwh = available_surplus_kwh - charge_from_surplus_kwh
 
         discharge_to_load_kwh = 0.0
-        should_discharge = (
-            demand_after_generation_kwh > 0
-            and (always_discharge or is_high_price)
+        should_discharge = demand_after_generation_kwh > 0 and (
+            always_discharge or is_high_price
         )
         if should_discharge:
             discharge_to_load_kwh = min(
@@ -157,10 +154,13 @@ def _run_dispatch_loop(
             and is_low_price
             and charge_power_remaining_kwh > 0
         ):
-            reserve_limited_charge_kwh = max(
-                grid_charge_soc_limit_kwh - soc_kwh,
-                0,
-            ) / battery.eta_charge
+            reserve_limited_charge_kwh = (
+                max(
+                    grid_charge_soc_limit_kwh - soc_kwh,
+                    0,
+                )
+                / battery.eta_charge
+            )
             charge_from_grid_kwh = min(
                 max_charge_input_kwh(soc_kwh, battery),
                 charge_power_remaining_kwh,
@@ -228,9 +228,7 @@ def _future_surplus_reserve(
     future_surplus_kwh = float(horizon_surplus.sum())
     usable_capacity_kwh = battery.max_soc_kwh - battery.min_soc_kwh
     reserved_surplus_headroom_kwh = min(
-        future_surplus_kwh
-        * battery.eta_charge
-        * scenario.surplus_reserve_fraction,
+        future_surplus_kwh * battery.eta_charge * scenario.surplus_reserve_fraction,
         usable_capacity_kwh,
     )
     grid_charge_soc_limit_kwh = max(

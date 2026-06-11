@@ -56,9 +56,7 @@ def test_prepare_simulation_data_reconstructs_canonical_energy_columns(
     assert prepared_df["grid_import_kwh"].tolist() == pytest.approx(
         [100.0, 50.0, 0.0, 100.0]
     )
-    assert prepared_df["grid_export_kwh"].tolist() == pytest.approx(
-        [0.0, 0.0, 25.0, 0.0]
-    )
+    assert prepared_df["grid_export_kwh"].tolist() == pytest.approx([0.0, 0.0, 25.0, 0.0])
 
 
 def test_prepare_simulation_data_applies_import_markup(make_analysis_df) -> None:
@@ -69,9 +67,7 @@ def test_prepare_simulation_data_applies_import_markup(make_analysis_df) -> None
 
     prepared_df = prepare_simulation_data(analysis_df, scenario)
 
-    assert prepared_df.loc[0, "dynamic_import_price_eur_per_kwh"] == pytest.approx(
-        0.15
-    )
+    assert prepared_df.loc[0, "dynamic_import_price_eur_per_kwh"] == pytest.approx(0.15)
 
 
 @pytest.mark.parametrize(
@@ -103,9 +99,7 @@ def test_prepare_simulation_data_rejects_invalid_numeric_values(
 def test_prepare_simulation_data_rejects_missing_required_columns(
     make_analysis_df,
 ) -> None:
-    analysis_df = make_analysis_df([{"total_w": 100_000}]).drop(
-        columns=["total_w"]
-    )
+    analysis_df = make_analysis_df([{"total_w": 100_000}]).drop(columns=["total_w"])
 
     with pytest.raises(ValueError):
         prepare_simulation_data(

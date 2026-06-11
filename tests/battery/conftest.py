@@ -16,9 +16,9 @@ def make_analysis_df() -> Callable[[list[dict]], pd.DataFrame]:
         for offset, row in enumerate(rows):
             record = {
                 "observation_timestamp": base_timestamp + pd.Timedelta(hours=offset),
-                "local_timestamp": (
-                    base_timestamp + pd.Timedelta(hours=offset)
-                ).tz_convert("Europe/Berlin").tz_localize(None),
+                "local_timestamp": (base_timestamp + pd.Timedelta(hours=offset))
+                .tz_convert("Europe/Berlin")
+                .tz_localize(None),
                 "total_w": 0.0,
                 "pv_w": 0.0,
                 "chp_w": 0.0,

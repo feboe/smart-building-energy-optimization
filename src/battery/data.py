@@ -74,9 +74,7 @@ def prepare_simulation_data(
     prepared_df["observation_timestamp"] = pd.to_datetime(
         prepared_df["observation_timestamp"], utc=True
     )
-    prepared_df["local_timestamp"] = pd.to_datetime(
-        prepared_df["local_timestamp"]
-    )
+    prepared_df["local_timestamp"] = pd.to_datetime(prepared_df["local_timestamp"])
 
     for column in REQUIRED_NUMERIC_COLUMNS:
         try:
@@ -93,12 +91,8 @@ def prepare_simulation_data(
 
     prepared_df = prepared_df.sort_values("local_timestamp").reset_index(drop=True)
     prepared_df["grid_energy_kwh"] = prepared_df["total_w"] / 1000
-    prepared_df["pv_generation_kwh"] = (
-        -prepared_df["pv_w"] / 1000
-    ).clip(lower=0)
-    prepared_df["chp_generation_kwh"] = (
-        -prepared_df["chp_w"] / 1000
-    ).clip(lower=0)
+    prepared_df["pv_generation_kwh"] = (-prepared_df["pv_w"] / 1000).clip(lower=0)
+    prepared_df["chp_generation_kwh"] = (-prepared_df["chp_w"] / 1000).clip(lower=0)
     prepared_df["local_generation_kwh"] = (
         prepared_df["pv_generation_kwh"] + prepared_df["chp_generation_kwh"]
     )
@@ -110,8 +104,7 @@ def prepare_simulation_data(
     _validate_reconstructed_energy_columns(prepared_df)
 
     prepared_df["dynamic_import_price_eur_per_kwh"] = (
-        prepared_df["day_ahead_price_eur_per_kwh"]
-        + scenario.import_markup_eur_per_kwh
+        prepared_df["day_ahead_price_eur_per_kwh"] + scenario.import_markup_eur_per_kwh
     )
     prepared_df["available_surplus_kwh"] = (
         prepared_df["local_generation_kwh"] - prepared_df["gross_load_kwh"]

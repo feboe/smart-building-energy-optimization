@@ -39,9 +39,7 @@ def max_charge_input_kwh(
 ) -> float:
     """Return maximum source energy that can charge the battery this step."""
     power_limited_input = battery.max_charge_power_kw * timestep_hours
-    capacity_limited_input = (
-        max(battery.max_soc_kwh - soc_kwh, 0) / battery.eta_charge
-    )
+    capacity_limited_input = max(battery.max_soc_kwh - soc_kwh, 0) / battery.eta_charge
     return max(min(power_limited_input, capacity_limited_input), 0)
 
 
@@ -125,14 +123,12 @@ def validate_dispatch_results(
         raise ValueError("Battery charge does not match charge components.")
 
     if (
-        dispatch_df["battery_charge_kwh"]
-        > battery.max_charge_power_kw + tolerance
+        dispatch_df["battery_charge_kwh"] > battery.max_charge_power_kw + tolerance
     ).any():
         raise ValueError("Battery charge exceeds the configured power limit.")
 
     if (
-        dispatch_df["discharge_to_load_kwh"]
-        > battery.max_discharge_power_kw + tolerance
+        dispatch_df["discharge_to_load_kwh"] > battery.max_discharge_power_kw + tolerance
     ).any():
         raise ValueError("Battery discharge exceeds the configured power limit.")
 
@@ -148,9 +144,9 @@ def validate_dispatch_results(
     ).any():
         raise ValueError("Battery discharges more energy than remaining demand.")
 
-    simultaneous_charge_discharge = (
-        dispatch_df["battery_charge_kwh"] > tolerance
-    ) & (dispatch_df["discharge_to_load_kwh"] > tolerance)
+    simultaneous_charge_discharge = (dispatch_df["battery_charge_kwh"] > tolerance) & (
+        dispatch_df["discharge_to_load_kwh"] > tolerance
+    )
     if simultaneous_charge_discharge.any():
         raise ValueError("Battery charges and discharges in the same timestep.")
 

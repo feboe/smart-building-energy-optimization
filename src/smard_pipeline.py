@@ -69,9 +69,7 @@ def extract_measurements(
     df["region"] = series.config.region
     df["resolution"] = series.config.resolution
     df["unit"] = series.unit
-    df["observation_timestamp"] = df["timestamp_ms"].apply(
-        timestamp_ms_to_datetime
-    )
+    df["observation_timestamp"] = df["timestamp_ms"].apply(timestamp_ms_to_datetime)
     return df[MEASUREMENT_COLUMNS]
 
 
