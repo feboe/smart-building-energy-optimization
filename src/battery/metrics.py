@@ -78,23 +78,24 @@ def calculate_dispatch_metrics(
     dispatch_df: pd.DataFrame,
     battery: BatteryParameters,
     scenario: ScenarioParameters,
-) -> dict[str, float | str]:
+) -> dict[str, float | str | None]:
     """Calculate metrics for one BESS dispatch result."""
     prepared_df = prepare_simulation_data(analysis_df, scenario)
     if len(prepared_df) != len(dispatch_df):
         raise ValueError("analysis_df and dispatch_df must have the same row count.")
 
     fixed_price = fixed_import_price(prepared_df, scenario)
+    dynamic_prices = prepared_df["dynamic_import_price_eur_per_kwh"].reset_index(
+        drop=True
+    )
+    dispatch_df = dispatch_df.reset_index(drop=True)
     total_load_kwh = float(prepared_df["gross_load_kwh"].sum())
     total_generation_kwh = float(prepared_df["local_generation_kwh"].sum())
     grid_import_kwh = float(dispatch_df["grid_import_kwh"].sum())
     grid_export_kwh = float(dispatch_df["grid_export_kwh"].sum())
 
     dynamic_grid_import_cost_eur = float(
-        (
-            dispatch_df["grid_import_kwh"].reset_index(drop=True)
-            * prepared_df["dynamic_import_price_eur_per_kwh"].reset_index(drop=True)
-        ).sum()
+        (dispatch_df["grid_import_kwh"] * dynamic_prices).sum()
     )
     fixed_grid_import_cost_eur = grid_import_kwh * fixed_price
     grid_export_revenue_eur = grid_export_kwh * scenario.export_price_eur_per_kwh
@@ -108,8 +109,37 @@ def calculate_dispatch_metrics(
     baseline = calculate_baseline_metrics(analysis_df, scenario)
 
     discharge_throughput_kwh = float(dispatch_df["discharge_to_load_kwh"].sum())
+    battery_charge_throughput_kwh = float(dispatch_df["battery_charge_kwh"].sum())
+    grid_charge_throughput_kwh = float(dispatch_df["charge_from_grid_kwh"].sum())
+    surplus_charge_throughput_kwh = float(
+        dispatch_df["charge_from_surplus_kwh"].sum()
+    )
+    available_surplus_kwh = float(dispatch_df["available_surplus_kwh"].sum())
     battery_degradation_cost_eur = (
         discharge_throughput_kwh * battery.degradation_cost_eur_per_kwh
+    )
+    average_grid_charge_price = _weighted_average(
+        values=dynamic_prices,
+        weights=dispatch_df["charge_from_grid_kwh"],
+    )
+    average_battery_discharge_price = _weighted_average(
+        values=dynamic_prices,
+        weights=dispatch_df["discharge_to_load_kwh"],
+    )
+    grid_charge_arbitrage_spread = _grid_charge_arbitrage_spread(
+        average_grid_charge_price=average_grid_charge_price,
+        average_battery_discharge_price=average_battery_discharge_price,
+        battery=battery,
+    )
+    soc_values = pd.concat(
+        [dispatch_df["soc_start_kwh"], dispatch_df["soc_end_kwh"]],
+        ignore_index=True,
+    )
+    usable_capacity_kwh = battery.max_soc_kwh - battery.min_soc_kwh
+    soc_range_utilization = (
+        float((soc_values.max() - soc_values.min()) / usable_capacity_kwh)
+        if usable_capacity_kwh > 0
+        else 0.0
     )
 
     if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
@@ -142,11 +172,25 @@ def calculate_dispatch_metrics(
         "cost_savings_eur": baseline_net_cost_eur - net_cost_eur,
         "grid_import_kwh": grid_import_kwh,
         "grid_export_kwh": grid_export_kwh,
-        "battery_charge_throughput_kwh": float(
-            dispatch_df["battery_charge_kwh"].sum()
-        ),
+        "battery_charge_throughput_kwh": battery_charge_throughput_kwh,
         "battery_discharge_throughput_kwh": discharge_throughput_kwh,
         "approximate_cycles": discharge_throughput_kwh / battery.capacity_kwh,
+        "grid_charge_share": (
+            grid_charge_throughput_kwh / battery_charge_throughput_kwh
+            if battery_charge_throughput_kwh > 0
+            else 0.0
+        ),
+        "average_grid_charge_price_eur_per_kwh": average_grid_charge_price,
+        "average_battery_discharge_price_eur_per_kwh": (
+            average_battery_discharge_price
+        ),
+        "grid_charge_arbitrage_spread_eur_per_kwh": grid_charge_arbitrage_spread,
+        "soc_range_utilization": soc_range_utilization,
+        "surplus_capture_ratio": (
+            surplus_charge_throughput_kwh / available_surplus_kwh
+            if available_surplus_kwh > 0
+            else 0.0
+        ),
         "peak_grid_import_kwh": float(dispatch_df["grid_import_kwh"].max()),
         "self_consumption_ratio": self_consumption_ratio,
         "self_consumption_improvement": (
@@ -154,3 +198,36 @@ def calculate_dispatch_metrics(
         ),
         "fixed_import_price_eur_per_kwh": fixed_price,
     }
+
+
+def _weighted_average(
+    values: pd.Series,
+    weights: pd.Series,
+) -> float | None:
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        return None
+
+    return float((values * weights).sum() / total_weight)
+
+
+def _grid_charge_arbitrage_spread(
+    average_grid_charge_price: float | None,
+    average_battery_discharge_price: float | None,
+    battery: BatteryParameters,
+) -> float | None:
+    if (
+        average_grid_charge_price is None
+        or average_battery_discharge_price is None
+    ):
+        return None
+
+    roundtrip_efficiency = battery.eta_charge * battery.eta_discharge
+    efficiency_adjusted_grid_charge_cost = (
+        average_grid_charge_price / roundtrip_efficiency
+    )
+    return (
+        average_battery_discharge_price
+        - efficiency_adjusted_grid_charge_cost
+        - battery.degradation_cost_eur_per_kwh
+    )
