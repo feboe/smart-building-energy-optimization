@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
+from time import perf_counter
 
 import pandas as pd
 
@@ -44,6 +45,7 @@ SURPLUS_RESERVE_FRACTION = 1.0
 METADATA_COLUMNS = [
     "experiment_name",
     "run_timestamp",
+    "elapsed_seconds",
     "method",
     "scenario",
     "price_model",
@@ -62,8 +64,10 @@ METADATA_COLUMNS = [
 
 def main() -> None:
     run_timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    script_start_time = perf_counter()
     print("Loading smart-company analysis data...")
     analysis_df = load_smart_company_analysis()
+    # analysis_df = analysis_df.head(500)  # Limit rows for faster experimentation
     print(f"Loaded {len(analysis_df):,} rows.")
 
     results_df = run_capacity_sensitivity(
@@ -75,6 +79,7 @@ def main() -> None:
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(RESULTS_PATH, index=False)
     print(f"Saved {len(results_df):,} result rows to {RESULTS_PATH}.")
+    print(f"Total elapsed time: {perf_counter() - script_start_time:.2f} seconds.")
 
 
 def run_capacity_sensitivity(
@@ -105,44 +110,54 @@ def run_capacity_sensitivity(
 
         for scenario in scenarios:
             print(f"  heuristic: {scenario.name}")
+            start_time = perf_counter()
             heuristic_dispatch_df = run_heuristic_dispatch(
                 analysis_df=analysis_df,
                 battery=battery,
                 scenario=scenario,
             )
+            heuristic_metrics = calculate_dispatch_metrics(
+                analysis_df=analysis_df,
+                dispatch_df=heuristic_dispatch_df,
+                battery=battery,
+                scenario=scenario,
+            )
+            elapsed_seconds = perf_counter() - start_time
             rows.append(
                 _with_metadata(
-                    row=calculate_dispatch_metrics(
-                        analysis_df=analysis_df,
-                        dispatch_df=heuristic_dispatch_df,
-                        battery=battery,
-                        scenario=scenario,
-                    ),
+                    row=heuristic_metrics,
                     method="heuristic",
                     scenario=scenario,
                     run_timestamp=timestamp,
+                    elapsed_seconds=elapsed_seconds,
                 )
             )
+            print(f"    elapsed: {elapsed_seconds:.2f} seconds")
 
             print(f"  lp_optimization: {scenario.name}")
+            start_time = perf_counter()
             optimized_dispatch_df = run_optimized_dispatch(
                 analysis_df=analysis_df,
                 battery=battery,
                 scenario=scenario,
             )
+            optimized_metrics = calculate_dispatch_metrics(
+                analysis_df=analysis_df,
+                dispatch_df=optimized_dispatch_df,
+                battery=battery,
+                scenario=scenario,
+            )
+            elapsed_seconds = perf_counter() - start_time
             rows.append(
                 _with_metadata(
-                    row=calculate_dispatch_metrics(
-                        analysis_df=analysis_df,
-                        dispatch_df=optimized_dispatch_df,
-                        battery=battery,
-                        scenario=scenario,
-                    ),
+                    row=optimized_metrics,
                     method="lp_optimization",
                     scenario=scenario,
                     run_timestamp=timestamp,
+                    elapsed_seconds=elapsed_seconds,
                 )
             )
+            print(f"    elapsed: {elapsed_seconds:.2f} seconds")
 
     results_df = pd.DataFrame(rows)
     results_df = results_df.sort_values(
@@ -194,10 +209,12 @@ def _baseline_rows(
     scenario: ScenarioParameters,
     run_timestamp: str,
 ) -> list[dict]:
+    start_time = perf_counter()
     baseline_metrics = calculate_baseline_metrics(
         analysis_df=analysis_df,
         scenario=scenario,
     )
+    elapsed_seconds = perf_counter() - start_time
     fixed_row = _baseline_row(
         baseline_metrics=baseline_metrics,
         price_model="fixed",
@@ -219,8 +236,20 @@ def _baseline_rows(
         ],
     )
     return [
-        _with_metadata(fixed_row, "baseline", scenario, run_timestamp),
-        _with_metadata(dynamic_row, "baseline", scenario, run_timestamp),
+        _with_metadata(
+            fixed_row,
+            "baseline",
+            scenario,
+            run_timestamp,
+            elapsed_seconds=elapsed_seconds,
+        ),
+        _with_metadata(
+            dynamic_row,
+            "baseline",
+            scenario,
+            run_timestamp,
+            elapsed_seconds=elapsed_seconds,
+        ),
     ]
 
 
@@ -272,12 +301,14 @@ def _with_metadata(
     method: str,
     scenario: ScenarioParameters,
     run_timestamp: str,
+    elapsed_seconds: float,
 ) -> dict:
     enriched_row = dict(row)
     enriched_row.update(
         {
             "experiment_name": EXPERIMENT_NAME,
             "run_timestamp": run_timestamp,
+            "elapsed_seconds": elapsed_seconds,
             "method": method,
             "import_markup_eur_per_kwh": scenario.import_markup_eur_per_kwh,
             "export_price_eur_per_kwh": scenario.export_price_eur_per_kwh,
