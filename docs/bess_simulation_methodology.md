@@ -49,6 +49,31 @@ This gives the dispatch algorithms a simple view of each hour: either there is
 local surplus to store/export, or there is remaining demand to serve from the
 battery/grid.
 
+## Price Model
+
+The simulation uses a simplified operating-cost model, not a full electricity
+tariff. Hourly SMARD day-ahead prices are converted to EUR/kWh and then a fixed
+import markup is added:
+
+```text
+dynamic_import_price_eur_per_kwh =
+    day_ahead_price_eur_per_kwh + import_markup_eur_per_kwh
+```
+
+In the current experiment script, the markup is `0.115 EUR/kWh`. This is meant
+to approximate non-energy components of an industrial import price, such as
+network charges, levies, taxes, and supplier margin.
+
+The fixed-price scenario uses one constant import price derived from the
+dynamic import-price series. Exported surplus is valued with a fixed export
+price, currently `0.08 EUR/kWh`. Battery wear is represented by a simple
+throughput cost, currently `0.03 EUR` per discharged kWh.
+
+These assumptions are intentionally coarse but suitable for comparing dispatch
+strategies. They should be read as 2021-style portfolio assumptions, not as a
+site-specific tariff model, EEG settlement model, or full battery lifetime-cost
+calculation.
+
 ## Battery Model
 
 The battery is modeled with a small set of physical assumptions:
