@@ -159,19 +159,6 @@ Here $P^{grid}$ is the grid connection limit. The model does not shed natural
 building demand if $l_t$ is already above the limit. It only prevents extra
 battery charging from increasing import further.
 
-## Terminal SOC
-
-Each horizon includes a terminal SOC condition:
-
-$$
-s_{last} \ge S_0
-$$
-
-This prevents the rolling optimizer from emptying the battery at the end of
-each horizon without considering what happens next. It is a conservative
-condition and can make the LP slightly less aggressive than a full-year
-perfect-foresight optimization.
-
 ## Why This Is an LP
 
 All decision variables are continuous energy quantities. That is natural for an

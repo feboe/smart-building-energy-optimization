@@ -172,9 +172,6 @@ def _solve_horizon(
             - discharge_to_load[step] / battery.eta_discharge
         ), f"soc_balance_{step}"
 
-    last_step = len(horizon_df) - 1
-    model += (soc[last_step] >= horizon_initial_soc_kwh), "terminal_soc_at_least_initial"
-
     model += (
         pulp.lpSum(
             _import_price(row, scenario, fixed_import_price_eur_per_kwh)
