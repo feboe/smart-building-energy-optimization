@@ -77,7 +77,6 @@ def main() -> None:
     script_start_time = perf_counter()
     print("Loading smart-company analysis data...")
     analysis_df = load_smart_company_analysis()
-    analysis_df = analysis_df.head(500)  # Limit rows for faster experimentation
     print(f"Loaded {len(analysis_df):,} rows.")
 
     results_df = run_capacity_sensitivity(
