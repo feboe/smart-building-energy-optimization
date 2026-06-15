@@ -2,5 +2,7 @@ data
 .venv
 __pycache__
 .env
-notebooks
 results
+notebooks/*
+!notebooks/
+!notebooks/plot_bess_results.ipynb
