@@ -1,79 +1,119 @@
-# Plan
+# Smart Building Energy Optimization
 
-## Cases
+This portfolio project builds an end-to-end energy analytics workflow for a
+smart company building: source ingestion, PostgreSQL normalization, hourly
+energy-balance reconstruction, BESS simulation, and experiment reporting.
 
-1. Surplus-only BESS
+Battery dispatch is compared using a transparent heuristic and a 24-hour
+rolling-horizon linear program (LP). The project is intended for learning and
+technical demonstration, not as production EMS software.
 
-    - battery can only charge from local surplus
-    - battery discharges to reduce grid import
-    - compare fixed-price vs dynamic-price cost outcomes
-    - this mostly test self consumption value
+## What This Project Demonstrates
 
-2. Surplus + grid-charging BESS
+- ingestion and normalization of heterogeneous energy time series
+- PostgreSQL schema and analysis-view design
+- physically validated battery dispatch simulation
+- rule-based control compared with mathematical optimization
+- reproducible, parallelized capacity-sensitivity experiments
 
-    - battery can charge from local surplus and from grid
-    - discharges in expensive/import hours
-    - this tests dynamic-price arbitrage plus self-consumption
+## Key Results
 
-3. For each compare:
+![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/assets/strategy_comparison_1000kwh.png)
 
-    - heuristic dispatch
-    - optimization dispatch
-    - different battery sizes
-    - different export prices
+- The site already self-consumes about `92%` of local PV and CHP generation.
+- The best tested `1000 kWh` case saves about `13.4k EUR/year` in simulated
+  operating cost.
+- In dynamic grid-charging operation, the LP adds about `4.0k EUR/year` over
+  the heuristic by scheduling energy for more valuable discharge hours.
+- Larger batteries increase total savings and surplus capture, but show
+  diminishing marginal value and fewer equivalent cycles per installed kWh.
 
-## Assumptions
+Savings exclude BESS purchase, installation, financing, maintenance, demand
+charges, and replacement costs. See the
+[full experiment results](docs/bess_experiment_results.md) for capacity
+sensitivity, utilization, runtime, feasibility checks, and a 48-hour dispatch
+comparison.
 
-- rolling optimization
-  - +24h horizon
-  - hourly decision making for the next 24h
-  - perfect foresight as optimal baseline
+## System Overview
 
-- prices
-  - dynamic import price = day-ahead price + assumed import markup
-  - fixed import price = mean(dynamic import price)
-  - ficed export price = scenario variable
+```text
+Dryad building data + SMARD prices
+    -> PostgreSQL measurement schema and analysis views
+    -> heuristic / rolling-horizon LP dispatch
+    -> physical validation and experiment metrics
+```
 
-- battery
-  - capacity_kwh: [250, 500, 1000, 2000]
-  - c_rate: 0.5 or 1.0
-  - min_soc = 10%
-  - max_soc = 100%
-  - eta_charge = 0.95
-  - eta_discharge = 0.95
-  - only discharges to load
-  - ignore wear and tear costs
+## Data Sources
 
-## Problem Formulation
+The building source is the corrected `reduced_data.zip` version updated on
+February 26, 2025. This project uses its hourly electricity measurements for
+2021. The local archive size, approximately `320.16 MB`, matches that corrected
+Dryad release.
 
-1. Decision Variables
+> Engel, Jens; Castellani, Andrea; Wollstadt, Patricia et al. (2025).
+> *A real-world energy management data set from a smart company building for
+> optimization and machine learning* [Dataset]. Dryad.
+> https://doi.org/10.5061/dryad.73n5tb363
 
-    - charge battery from grid (kWh)
-    - charge battery from surplus (kWh)
-    - discharge battery to load (kWh)
-    - export to grid (kWh)
-    - import from grid (kWh)
-    - soc (kWh)
+Dryad datasets are published under CC0; the citation is retained to credit the
+dataset authors. German day-ahead electricity prices are sourced from
+[SMARD](https://www.smard.de/home), operated by the German Federal Network
+Agency.
 
-2. Constraints
+Raw data files and local analysis notebooks are intentionally not committed to
+this repository.
 
-    - generation pv + generation chp + grid import + battery discharge = total load + battery charge + grid export
-    - battery soc cant be lower than 10% or higher than 100% of capacity (kWh)
-    - enable grid charge for different cases (charge from grid = 0)
-    - charge from surplus cant be higher than surplus (charge from surplus <= surplus)
+## Modeling Approach
 
-3. Objectives
+The experiment compares:
 
-    - minimize effective cost per load (net annual cost/total building load)
+- a no-battery baseline
+- fixed-price surplus-only storage
+- dynamic-price surplus-only storage
+- dynamic-price storage with grid charging
+- heuristic and LP dispatch across `250-2000 kWh` capacities
 
-## Heuristic
+Both controllers use the same physical dispatch contract and validator. The
+battery has `95%` charge and discharge efficiency, a `0.03 EUR/kWh` discharged
+degradation proxy, and a `500 kW` limit for additional grid charging. Stored
+energy can serve local load but cannot be exported.
 
-- charge battery from surplus as highest priority
-- discharge battery if price is 75th percentile of known forecast prices
-- charge battery from grid if price is 25th percentile of known forecast prices (only in second scenario)
-- only do grid export if storage is at 100%
-- indirect optimization of costs with rules
+## Quick Start
 
-## Neglected
+Download `reduced_data.zip` from the
+[Dryad dataset](https://doi.org/10.5061/dryad.73n5tb363) and place it at
+`data/reduced_data.zip`. Then run:
 
-- battery can only discharge or charge as a hard constraint
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+docker compose up -d
+.\.venv\Scripts\python scripts\ingest_data.py
+.\.venv\Scripts\python scripts\run_bess_experiments.py
+.\.venv\Scripts\python -m pytest tests -q
+```
+
+The ingestion and experiment settings are editable constants at the top of the
+two scripts. Experiment summaries are written to
+`results/bess_experiment_results.csv`.
+
+The unit tests are offline: they do not require the downloaded source archive,
+network access, or PostgreSQL.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [Experiment results](docs/bess_experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
+| [Simulation methodology](docs/bess_simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
+| [Heuristic dispatch](docs/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
+| [LP optimization](docs/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
+
+## Limitations
+
+- The LP has perfect foresight inside each rolling horizon.
+- The model uses hourly rather than quarter-hour resolution.
+- Battery degradation is represented by a simplified throughput cost.
+- Forecast uncertainty and real-time command correction are not modeled.
+- Reported savings exclude BESS capex and demand charges.
