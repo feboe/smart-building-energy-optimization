@@ -53,7 +53,7 @@ Dryad release.
 > Engel, Jens; Castellani, Andrea; Wollstadt, Patricia et al. (2025).
 > *A real-world energy management data set from a smart company building for
 > optimization and machine learning* [Dataset]. Dryad.
-> https://doi.org/10.5061/dryad.73n5tb363
+> <https://doi.org/10.5061/dryad.73n5tb363>
 
 Dryad datasets are published under CC0; the citation is retained to credit the
 dataset authors. German day-ahead electricity prices are sourced from
@@ -84,19 +84,30 @@ Download `reduced_data.zip` from the
 [Dryad dataset](https://doi.org/10.5061/dryad.73n5tb363) and place it at
 `data/reduced_data.zip`. Then run:
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-Copy-Item .env.example .env
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp .env.example .env
 docker compose up -d
-.\.venv\Scripts\python scripts\ingest_data.py
-.\.venv\Scripts\python scripts\run_bess_experiments.py
-.\.venv\Scripts\python -m pytest tests -q
+python scripts/ingest_data.py
+python scripts/run_bess_experiments.py
 ```
 
 The ingestion and experiment settings are editable constants at the top of the
 two scripts. Experiment summaries are written to
 `results/bess_experiment_results.csv`.
+
+`requirements.txt` contains the runtime dependencies. `requirements-dev.txt`
+adds test, notebook, and figure-generation tooling for local development.
+
+To run the offline unit tests, install the development dependencies and run
+pytest:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
 
 The unit tests are offline: they do not require the downloaded source archive,
 network access, or PostgreSQL.
