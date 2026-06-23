@@ -29,7 +29,9 @@ technical demonstration, not as production EMS software.
   diminishing marginal value and fewer equivalent cycles per installed kWh.
 
 Savings exclude BESS purchase, installation, financing, maintenance, demand
-charges, and replacement costs. See the
+charges, and replacement costs. Savings are measured against the corresponding
+no-battery baseline: fixed-price scenarios use the fixed-price baseline, while
+dynamic-price scenarios use the dynamic-price baseline. See the
 [full experiment results](docs/bess_experiment_results.md) for capacity
 sensitivity, utilization, runtime, feasibility checks, and a 48-hour dispatch
 comparison.
