@@ -62,8 +62,8 @@ $$
 \min \sum_{t \in T}
 \left(
 p_t g^{imp}_t
-- p^{exp} g^{exp}_t
-+ c^{deg} d_t
+{}- p^{exp} g^{exp}_t
+{}+ c^{deg} d_t
 \right)
 $$
 

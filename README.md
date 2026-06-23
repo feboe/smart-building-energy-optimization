@@ -60,9 +60,6 @@ dataset authors. German day-ahead electricity prices are sourced from
 [SMARD](https://www.smard.de/home), operated by the German Federal Network
 Agency.
 
-Raw data files and local analysis notebooks are intentionally not committed to
-this repository.
-
 ## Modeling Approach
 
 The experiment compares:
