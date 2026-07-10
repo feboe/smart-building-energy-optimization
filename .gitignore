@@ -3,6 +3,4 @@ data
 __pycache__
 .env
 results
-notebooks/*
-!notebooks/
-!notebooks/plot_bess_results.ipynb
+linkedin_*
