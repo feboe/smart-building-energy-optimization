@@ -1,9 +1,12 @@
+DROP VIEW IF EXISTS smart_company_forecasting;
 DROP VIEW IF EXISTS smart_company_analysis;
 DROP VIEW IF EXISTS electricity_p_calendar;
+DROP VIEW IF EXISTS electricity_p_calendar_all;
 DROP VIEW IF EXISTS electricity_p_clean;
+DROP VIEW IF EXISTS electricity_p_reconstructed;
 
 
-CREATE OR REPLACE VIEW electricity_p_clean AS
+CREATE OR REPLACE VIEW electricity_p_reconstructed AS
 WITH electricity_p_raw AS (
     SELECT
         source_system,
@@ -102,7 +105,6 @@ SELECT
         WHEN load.total_w >= 0 THEN 0
         ELSE NULL
     END AS grid_export_kwh,
-    load.gross_load_w / 1000 AS gross_load_kwh,
     load.pv_generation_w / 1000 AS pv_generation_kwh,
     load.chp_generation_w / 1000 AS chp_generation_kwh,
     prices.day_ahead_price_eur_per_mwh,
@@ -112,13 +114,20 @@ SELECT
 FROM electricity_p_load load
 LEFT JOIN day_ahead_prices prices
     ON prices.observation_timestamp = load.observation_timestamp
-    AND prices.resolution = load.resolution
-WHERE load.gross_load_w IS NULL OR load.gross_load_w >= -100;
+    AND prices.resolution = load.resolution;
 
 
-CREATE OR REPLACE VIEW electricity_p_calendar AS
+CREATE OR REPLACE VIEW electricity_p_clean AS
 SELECT
-    *,
+    reconstructed.*,
+    reconstructed.gross_load_w / 1000 AS gross_load_kwh
+FROM electricity_p_reconstructed reconstructed
+WHERE reconstructed.gross_load_w IS NULL OR reconstructed.gross_load_w >= -100;
+
+
+CREATE OR REPLACE VIEW electricity_p_calendar_all AS
+SELECT
+    reconstructed.*,
     observation_timestamp AT TIME ZONE 'Europe/Berlin' AS local_timestamp,
     EXTRACT(YEAR FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
         AS local_year,
@@ -132,7 +141,31 @@ SELECT
         AS local_isodow,
     EXTRACT(ISODOW FROM observation_timestamp AT TIME ZONE 'Europe/Berlin')::INT
         IN (6, 7) AS is_weekend
-FROM electricity_p_clean;
+FROM electricity_p_reconstructed reconstructed;
+
+
+CREATE OR REPLACE VIEW electricity_p_calendar AS
+SELECT
+    calendar.*,
+    calendar.gross_load_w / 1000 AS gross_load_kwh
+FROM electricity_p_calendar_all calendar
+WHERE calendar.gross_load_w IS NULL OR calendar.gross_load_w >= -100;
+
+
+CREATE OR REPLACE VIEW smart_company_forecasting AS
+SELECT
+    calendar.*,
+    calendar.gross_load_w / 1000 AS gross_load_raw_kwh,
+    CASE
+        WHEN calendar.gross_load_w IS NULL OR calendar.gross_load_w < -100 THEN NULL
+        ELSE calendar.gross_load_w / 1000
+    END AS gross_load_kwh,
+    CASE
+        WHEN calendar.gross_load_w IS NULL THEN 'missing_gross_load'
+        WHEN calendar.gross_load_w < -100 THEN 'negative_gross_load'
+        ELSE NULL
+    END AS gross_load_quality_issue
+FROM electricity_p_calendar_all calendar;
 
 
 CREATE OR REPLACE VIEW smart_company_analysis AS
