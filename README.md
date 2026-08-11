@@ -116,6 +116,7 @@ network access, or PostgreSQL.
 | Document | Contents |
 |---|---|
 | [Experiment results](docs/bess_experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
+| [Load forecast results](docs/load_forecast_results.md) | Baseline comparison and training-history validation results |
 | [Simulation methodology](docs/bess_simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
 | [Heuristic dispatch](docs/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
 | [LP optimization](docs/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
