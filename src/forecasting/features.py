@@ -2,6 +2,7 @@
 
 import math
 
+import holidays
 import pandas as pd
 
 from src.forecasting.config import ForecastConfig
@@ -16,6 +17,8 @@ LOAD_FEATURE_COLUMNS = [
     "target_local_isodow",
     "target_is_weekend",
     "target_local_month",
+    "target_is_holiday",
+    "target_is_bridge_day",
     "load_same_hour_previous_day",
     "load_same_hour_previous_week",
     "load_current",
@@ -47,12 +50,14 @@ def build_forecast_features(
     _validate_feature_input(prepared_data, forecast_origins, config)
 
     target = prepared_data[config.target_column]
+    holiday_dates = _holiday_dates(prepared_data, config)
     feature_rows: list[dict[str, object]] = []
     for origin in forecast_origins:
         origin_features = _origin_load_features(target, origin)
         for horizon_hours in range(1, config.horizon_hours + 1):
             forecast_timestamp = origin + pd.Timedelta(hours=horizon_hours)
             target_row = prepared_data.loc[forecast_timestamp]
+            target_local_date = _local_date(target_row, config)
             row = {
                 "forecast_origin": origin,
                 "forecast_timestamp": forecast_timestamp,
@@ -61,6 +66,11 @@ def build_forecast_features(
                 "target_local_isodow": int(target_row["local_isodow"]),
                 "target_is_weekend": bool(target_row["is_weekend"]),
                 "target_local_month": int(target_row["local_month"]),
+                "target_is_holiday": target_local_date in holiday_dates,
+                "target_is_bridge_day": _is_bridge_day(
+                    target_local_date,
+                    holiday_dates,
+                ),
                 "load_same_hour_previous_day": _load_at(
                     target,
                     forecast_timestamp - pd.Timedelta(hours=24),
@@ -103,6 +113,7 @@ def _validate_feature_input(
         "local_isodow",
         "is_weekend",
         "local_month",
+        forecast_config.local_timestamp_column,
     }
     missing_columns = sorted(required_columns - set(prepared_data.columns))
     if missing_columns:
@@ -142,6 +153,41 @@ def _validate_feature_input(
 
     for origin in forecast_origins:
         _validate_origin(prepared_data.index, origin, forecast_config)
+
+
+def _holiday_dates(
+    prepared_data: pd.DataFrame,
+    forecast_config: ForecastConfig,
+) -> set[object]:
+    local_dates = pd.to_datetime(
+        prepared_data[forecast_config.local_timestamp_column],
+        errors="raise",
+    ).dt.date
+    years = sorted({local_date.year for local_date in local_dates})
+    calendar = holidays.country_holidays(
+        forecast_config.holiday_country,
+        subdiv=forecast_config.holiday_subdivision,
+        years=years,
+    )
+    return set(calendar.keys())
+
+
+def _local_date(target_row: pd.Series, forecast_config: ForecastConfig) -> object:
+    local_timestamp = pd.to_datetime(
+        target_row[forecast_config.local_timestamp_column],
+        errors="raise",
+    )
+    return local_timestamp.date()
+
+
+def _is_bridge_day(local_date: object, holiday_dates: set[object]) -> bool:
+    if local_date in holiday_dates:
+        return False
+    if local_date.weekday() == 0:
+        return local_date + pd.Timedelta(days=1) in holiday_dates
+    if local_date.weekday() == 4:
+        return local_date - pd.Timedelta(days=1) in holiday_dates
+    return False
 
 
 def _validate_origin(

@@ -13,6 +13,8 @@ class ForecastConfig:
     raw_target_column: str = "gross_load_raw_kwh"
     target_quality_column: str = "gross_load_quality_issue"
     imputation_flag_column: str = "gross_load_was_imputed"
+    holiday_country: str = "DE"
+    holiday_subdivision: str = "HE"
     frequency: str = "h"
     horizon_hours: int = 24
 
@@ -21,3 +23,7 @@ class ForecastConfig:
             raise ValueError("horizon_hours must be positive.")
         if not self.frequency:
             raise ValueError("frequency must not be empty.")
+        if not self.holiday_country:
+            raise ValueError("holiday_country must not be empty.")
+        if not self.holiday_subdivision:
+            raise ValueError("holiday_subdivision must not be empty.")
