@@ -17,9 +17,11 @@ from src.forecasting.evaluation import (
 from src.forecasting.features import (
     FEATURE_METADATA_COLUMNS,
     LOAD_FEATURE_COLUMNS,
+    MODEL_FEATURE_COLUMNS,
     TARGET_FEATURE_COLUMN,
     build_forecast_features,
 )
+from src.forecasting.models import HistGradientBoostingLoadForecaster
 from src.forecasting.splits import (
     DEFAULT_FORECAST_SPLITS,
     TEST_SPLIT,
@@ -35,12 +37,14 @@ __all__ = [
     "ForecastModel",
     "DailyNaiveForecaster",
     "WeeklyNaiveForecaster",
+    "HistGradientBoostingLoadForecaster",
     "load_smart_company_forecasting",
     "prepare_forecasting_data",
     "join_forecasts_with_actuals",
     "calculate_forecast_metrics",
     "FEATURE_METADATA_COLUMNS",
     "LOAD_FEATURE_COLUMNS",
+    "MODEL_FEATURE_COLUMNS",
     "TARGET_FEATURE_COLUMN",
     "build_forecast_features",
     "ForecastSplit",

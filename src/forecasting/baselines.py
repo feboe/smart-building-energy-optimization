@@ -20,7 +20,12 @@ class ForecastModel(Protocol):
 
     model_name: str
 
-    def fit(self, training_data: pd.DataFrame) -> Self:
+    def fit(
+        self,
+        prepared_data: pd.DataFrame,
+        training_origins: pd.DatetimeIndex,
+        forecast_config: ForecastConfig | None = None,
+    ) -> Self:
         """Validate or train the model using data available before evaluation."""
 
     def predict(
@@ -37,9 +42,16 @@ class DailyNaiveForecaster:
 
     model_name = "daily_naive"
 
-    def fit(self, training_data: pd.DataFrame) -> Self:
+    def fit(
+        self,
+        prepared_data: pd.DataFrame,
+        training_origins: pd.DatetimeIndex,
+        forecast_config: ForecastConfig | None = None,
+    ) -> Self:
         """Validate the shared input contract; seasonal naive needs no fitting."""
-        _validate_prepared_data(training_data, ForecastConfig())
+        config = forecast_config or ForecastConfig()
+        _validate_prepared_data(prepared_data, config)
+        _validate_forecast_origins(training_origins, prepared_data.index)
         return self
 
     def predict(
@@ -64,9 +76,16 @@ class WeeklyNaiveForecaster:
 
     model_name = "weekly_naive"
 
-    def fit(self, training_data: pd.DataFrame) -> Self:
+    def fit(
+        self,
+        prepared_data: pd.DataFrame,
+        training_origins: pd.DatetimeIndex,
+        forecast_config: ForecastConfig | None = None,
+    ) -> Self:
         """Validate the shared input contract; seasonal naive needs no fitting."""
-        _validate_prepared_data(training_data, ForecastConfig())
+        config = forecast_config or ForecastConfig()
+        _validate_prepared_data(prepared_data, config)
+        _validate_forecast_origins(training_origins, prepared_data.index)
         return self
 
     def predict(
