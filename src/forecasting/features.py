@@ -19,6 +19,7 @@ LOAD_FEATURE_COLUMNS = [
     "target_local_month",
     "target_is_holiday",
     "target_is_bridge_day",
+    "target_is_christmas_shutdown",
     "load_same_hour_previous_day",
     "load_same_hour_previous_week",
     "load_current",
@@ -70,6 +71,9 @@ def build_forecast_features(
                 "target_is_bridge_day": _is_bridge_day(
                     target_local_date,
                     holiday_dates,
+                ),
+                "target_is_christmas_shutdown": _is_christmas_shutdown(
+                    target_local_date,
                 ),
                 "load_same_hour_previous_day": _load_at(
                     target,
@@ -188,6 +192,13 @@ def _is_bridge_day(local_date: object, holiday_dates: set[object]) -> bool:
     if local_date.weekday() == 4:
         return local_date - pd.Timedelta(days=1) in holiday_dates
     return False
+
+
+def _is_christmas_shutdown(local_date: object) -> bool:
+    """Return the observed annual company shutdown from 24 December to 2 January."""
+    return (local_date.month == 12 and local_date.day >= 24) or (
+        local_date.month == 1 and local_date.day <= 2
+    )
 
 
 def _validate_origin(

@@ -24,6 +24,7 @@ from src.forecasting.features import (
 from src.forecasting.models import HistGradientBoostingLoadForecaster
 from src.forecasting.splits import (
     DEFAULT_FORECAST_SPLITS,
+    EXTENDED_TRAINING_SPLIT,
     TEST_SPLIT,
     TRAINING_SPLIT,
     VALIDATION_SPLIT,
@@ -49,6 +50,7 @@ __all__ = [
     "build_forecast_features",
     "ForecastSplit",
     "TRAINING_SPLIT",
+    "EXTENDED_TRAINING_SPLIT",
     "VALIDATION_SPLIT",
     "TEST_SPLIT",
     "DEFAULT_FORECAST_SPLITS",

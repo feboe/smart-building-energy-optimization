@@ -29,6 +29,12 @@ TRAINING_SPLIT = ForecastSplit(
     start=pd.Timestamp("2020-01-01T00:00:00Z"),
     end=pd.Timestamp("2020-10-01T00:00:00Z"),
 )
+EXTENDED_TRAINING_SPLIT = ForecastSplit(
+    name="extended_training",
+    # First timestamp with complete PV, CHP, and total-load observations.
+    start=pd.Timestamp("2019-06-28T22:00:00Z"),
+    end=pd.Timestamp("2020-10-01T00:00:00Z"),
+)
 VALIDATION_SPLIT = ForecastSplit(
     name="validation",
     start=pd.Timestamp("2020-10-01T00:00:00Z"),
