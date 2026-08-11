@@ -5,3 +5,4 @@ __pycache__
 results
 linkedin_*
 notebooks/sql_views_explorer.ipynb
+notebooks/load_forecast_baselines.ipynb
