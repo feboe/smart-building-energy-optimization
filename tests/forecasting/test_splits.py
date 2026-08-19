@@ -2,16 +2,33 @@
 
 import pandas as pd
 
-from src.forecasting.splits import (
-    DEFAULT_FORECAST_SPLITS,
-    EXTENDED_TRAINING_SPLIT,
-    TEST_SPLIT,
-    TRAINING_SPLIT,
-    VALIDATION_SPLIT,
-    ForecastSplit,
+from src.forecasting.config import ForecastConfig, ForecastSplit
+from src.forecasting.evaluation import (
     select_forecast_split,
     select_valid_forecast_origins,
 )
+
+TRAINING_SPLIT = ForecastSplit(
+    name="training",
+    start=pd.Timestamp("2020-01-01T00:00:00Z"),
+    end=pd.Timestamp("2020-10-01T00:00:00Z"),
+)
+EXTENDED_TRAINING_SPLIT = ForecastSplit(
+    name="extended_training",
+    start=pd.Timestamp("2019-06-28T22:00:00Z"),
+    end=pd.Timestamp("2020-10-01T00:00:00Z"),
+)
+VALIDATION_SPLIT = ForecastSplit(
+    name="validation",
+    start=pd.Timestamp("2020-10-01T00:00:00Z"),
+    end=pd.Timestamp("2021-01-01T00:00:00Z"),
+)
+TEST_SPLIT = ForecastSplit(
+    name="test",
+    start=pd.Timestamp("2021-01-01T00:00:00Z"),
+    end=pd.Timestamp("2022-01-01T00:00:00Z"),
+)
+DEFAULT_FORECAST_SPLITS = (TRAINING_SPLIT, VALIDATION_SPLIT, TEST_SPLIT)
 
 
 def test_default_splits_are_contiguous_and_non_overlapping() -> None:
@@ -45,12 +62,30 @@ def test_select_forecast_split_uses_half_open_intervals() -> None:
     ]
 
 
+def test_select_forecast_split_uses_custom_forecast_config() -> None:
+    index = pd.date_range("2020-09-30T22:00:00Z", periods=3, freq="2h")
+    prepared_data = pd.DataFrame({"custom_target": [1.0, 2.0, 3.0]}, index=index)
+    config = ForecastConfig(target_column="custom_target", frequency="2h")
+
+    selected_data = select_forecast_split(
+        prepared_data,
+        VALIDATION_SPLIT,
+        config,
+    )
+
+    assert selected_data.index.tolist() == index[1:].tolist()
+
+
 def test_select_valid_forecast_origins_excludes_missing_history_and_horizon() -> None:
     index = pd.date_range("2020-01-01T00:00:00Z", periods=240, freq="h")
     prepared_data = pd.DataFrame({"gross_load_kwh": range(len(index))}, index=index)
     small_split = ForecastSplit(name="small", start=index[50], end=index[220])
 
-    origins = select_valid_forecast_origins(prepared_data, small_split)
+    origins = select_valid_forecast_origins(
+        prepared_data,
+        small_split,
+        required_history_hours=168,
+    )
 
     assert origins[0] == index[168]
     assert origins[-1] == index[195]
@@ -66,7 +101,11 @@ def test_extended_training_origins_wait_for_required_history() -> None:
     )
     prepared_data = pd.DataFrame({"gross_load_kwh": range(len(index))}, index=index)
 
-    origins = select_valid_forecast_origins(prepared_data, EXTENDED_TRAINING_SPLIT)
+    origins = select_valid_forecast_origins(
+        prepared_data,
+        EXTENDED_TRAINING_SPLIT,
+        required_history_hours=168,
+    )
 
     assert origins[0] == EXTENDED_TRAINING_SPLIT.start + pd.Timedelta(hours=168)
     assert origins[-1] == index[-25]

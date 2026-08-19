@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from src.forecasting.baselines import (
+from src.forecasting.models import (
     FORECAST_COLUMNS,
     DailyNaiveForecaster,
     WeeklyNaiveForecaster,
@@ -31,6 +31,7 @@ def test_seasonal_naive_forecasters_use_the_expected_lag(
     origins = prepared_data.index[[180, 181]]
 
     assert forecaster.fit(prepared_data, origins) is forecaster
+    assert forecaster.required_history_hours == lag_hours
     forecasts = forecaster.predict(prepared_data, origins)
 
     assert list(forecasts.columns) == FORECAST_COLUMNS

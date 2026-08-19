@@ -6,9 +6,9 @@ import pandas as pd
 import pytest
 from sklearn.exceptions import NotFittedError
 
-from src.forecasting.baselines import FORECAST_COLUMNS
-from src.forecasting.features import MODEL_FEATURE_COLUMNS
-from src.forecasting.models import HistGradientBoostingLoadForecaster
+from src.forecasting.config import HGBConfig
+from src.forecasting.features import MAX_HISTORY_HOURS, MODEL_FEATURE_COLUMNS
+from src.forecasting.models import FORECAST_COLUMNS, HistGradientBoostingLoadForecaster
 
 
 def _make_prepared_data(periods: int = 240) -> pd.DataFrame:
@@ -41,6 +41,7 @@ def test_hgb_forecaster_uses_shared_input_and_output_contract() -> None:
     origins = prepared_data.index[[180, 181]]
     forecaster = HistGradientBoostingLoadForecaster()
 
+    assert forecaster.required_history_hours == MAX_HISTORY_HOURS
     assert forecaster.fit(prepared_data, origins) is forecaster
     assert forecaster.estimator_ is not None
     assert forecaster.estimator_.feature_names_in_.tolist() == MODEL_FEATURE_COLUMNS
@@ -53,3 +54,30 @@ def test_hgb_forecaster_uses_shared_input_and_output_contract() -> None:
     assert forecasts["horizon_hours"].tolist() == list(range(1, 25)) * len(origins)
     assert forecasts["prediction_kwh"].ge(0).all()
     assert forecasts["prediction_kwh"].map(math.isfinite).all()
+
+
+def test_hgb_forecaster_uses_injected_model_configuration() -> None:
+    prepared_data = _make_prepared_data()
+    origins = prepared_data.index[[180, 181]]
+    model_config = HGBConfig(
+        learning_rate=0.1,
+        max_iter=10,
+        max_leaf_nodes=7,
+        min_samples_leaf=5,
+        l2_regularization=0.5,
+        random_state=7,
+    )
+
+    forecaster = HistGradientBoostingLoadForecaster(model_config).fit(
+        prepared_data,
+        origins,
+    )
+
+    assert forecaster.model_config is model_config
+    assert forecaster.estimator_ is not None
+    assert forecaster.estimator_.learning_rate == 0.1
+    assert forecaster.estimator_.max_iter == 10
+    assert forecaster.estimator_.max_leaf_nodes == 7
+    assert forecaster.estimator_.min_samples_leaf == 5
+    assert forecaster.estimator_.l2_regularization == 0.5
+    assert forecaster.estimator_.random_state == 7
