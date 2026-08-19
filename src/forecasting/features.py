@@ -6,6 +6,10 @@ import holidays
 import pandas as pd
 
 from src.forecasting.config import ForecastConfig
+from src.forecasting.data import (
+    validate_forecast_origins,
+    validate_prepared_forecasting_data,
+)
 
 FEATURE_METADATA_COLUMNS = [
     "forecast_origin",
@@ -111,6 +115,7 @@ def _validate_feature_input(
             "Load features support at most a 24-hour horizon to prevent leakage."
         )
 
+    validate_prepared_forecasting_data(prepared_data, forecast_config)
     required_columns = {
         forecast_config.target_column,
         "local_hour",
@@ -122,40 +127,9 @@ def _validate_feature_input(
     missing_columns = sorted(required_columns - set(prepared_data.columns))
     if missing_columns:
         raise ValueError(f"Prepared data is missing feature columns: {missing_columns}")
-    if prepared_data.empty:
-        raise ValueError("Prepared data is empty.")
-    if not isinstance(prepared_data.index, pd.DatetimeIndex):
-        raise ValueError("Prepared data must use a UTC DatetimeIndex.")
-    if prepared_data.index.tz is None or str(prepared_data.index.tz) != "UTC":
-        raise ValueError("Prepared data index must use the UTC timezone.")
-    if prepared_data.index.has_duplicates:
-        raise ValueError("Prepared data index must not contain duplicate timestamps.")
-    if not prepared_data.index.is_monotonic_increasing:
-        raise ValueError("Prepared data index must be sorted in ascending order.")
+    origins = validate_forecast_origins(forecast_origins, prepared_data.index)
 
-    expected_index = pd.date_range(
-        start=prepared_data.index.min(),
-        end=prepared_data.index.max(),
-        freq=forecast_config.frequency,
-        tz="UTC",
-    )
-    if not prepared_data.index.equals(expected_index):
-        raise ValueError(
-            "Prepared data index must be continuous at the forecast frequency."
-        )
-
-    if not isinstance(forecast_origins, pd.DatetimeIndex):
-        raise ValueError("forecast_origins must be a UTC DatetimeIndex.")
-    if forecast_origins.empty:
-        raise ValueError("forecast_origins must not be empty.")
-    if forecast_origins.tz is None or str(forecast_origins.tz) != "UTC":
-        raise ValueError("forecast_origins must use the UTC timezone.")
-    if forecast_origins.has_duplicates:
-        raise ValueError("forecast_origins must not contain duplicate timestamps.")
-    if not forecast_origins.is_monotonic_increasing:
-        raise ValueError("forecast_origins must be sorted in ascending order.")
-
-    for origin in forecast_origins:
+    for origin in origins:
         _validate_origin(prepared_data.index, origin, forecast_config)
 
 

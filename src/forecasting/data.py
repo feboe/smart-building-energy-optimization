@@ -113,6 +113,62 @@ def validate_forecasting_data(
         raise ValueError("Forecasting data is empty.")
 
 
+def validate_prepared_forecasting_data(
+    prepared_data: pd.DataFrame,
+    forecast_config: ForecastConfig | None = None,
+) -> None:
+    """Validate the common UTC time-series contract used by forecasters."""
+    config = forecast_config or ForecastConfig()
+    if config.target_column not in prepared_data.columns:
+        raise ValueError(
+            f"Prepared data is missing target column {config.target_column!r}."
+        )
+    if prepared_data.empty:
+        raise ValueError("Prepared data is empty.")
+    if not isinstance(prepared_data.index, pd.DatetimeIndex):
+        raise ValueError("Prepared data must use a UTC DatetimeIndex.")
+    if prepared_data.index.tz is None or str(prepared_data.index.tz) != "UTC":
+        raise ValueError("Prepared data index must use the UTC timezone.")
+    if prepared_data.index.has_duplicates:
+        raise ValueError("Prepared data index must not contain duplicate timestamps.")
+    if not prepared_data.index.is_monotonic_increasing:
+        raise ValueError("Prepared data index must be sorted in ascending order.")
+
+    expected_index = pd.date_range(
+        start=prepared_data.index.min(),
+        end=prepared_data.index.max(),
+        freq=config.frequency,
+        tz="UTC",
+    )
+    if not prepared_data.index.equals(expected_index):
+        raise ValueError(
+            "Prepared data index must be continuous at the forecast frequency."
+        )
+
+
+def validate_forecast_origins(
+    forecast_origins: pd.DatetimeIndex,
+    data_index: pd.DatetimeIndex,
+) -> pd.DatetimeIndex:
+    """Validate and return forecast origins present in a prepared time series."""
+    if not isinstance(forecast_origins, pd.DatetimeIndex):
+        raise ValueError("forecast_origins must be a UTC DatetimeIndex.")
+    if forecast_origins.empty:
+        raise ValueError("forecast_origins must not be empty.")
+    if forecast_origins.tz is None or str(forecast_origins.tz) != "UTC":
+        raise ValueError("forecast_origins must use the UTC timezone.")
+    if forecast_origins.has_duplicates:
+        raise ValueError("forecast_origins must not contain duplicate timestamps.")
+    if not forecast_origins.is_monotonic_increasing:
+        raise ValueError("forecast_origins must be sorted in ascending order.")
+
+    unknown_origins = forecast_origins.difference(data_index)
+    if not unknown_origins.empty:
+        examples = ", ".join(timestamp.isoformat() for timestamp in unknown_origins[:3])
+        raise ValueError(f"forecast_origins are not present in prepared data: {examples}")
+    return forecast_origins
+
+
 def _coerce_numeric_columns(
     prepared_df: pd.DataFrame,
     config: ForecastConfig,
