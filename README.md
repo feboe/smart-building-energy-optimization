@@ -2,21 +2,27 @@
 
 This portfolio project builds an end-to-end energy analytics workflow for a
 smart company building: source ingestion, PostgreSQL normalization, hourly
-energy-balance reconstruction, BESS simulation, and experiment reporting.
+energy-balance reconstruction, load forecasting, BESS simulation, and
+experiment reporting.
 
-Battery dispatch is compared using a transparent heuristic and a 24-hour
-rolling-horizon linear program (LP). The project is intended for learning and
-technical demonstration, not as production EMS software.
+Load forecasting compares seasonal-naive baselines with histogram gradient
+boosting under chronological evaluation. Battery dispatch is compared using a
+transparent heuristic and a 24-hour rolling-horizon linear program (LP). The
+project is intended for learning and technical demonstration, not as
+production EMS software.
 
 ## What This Project Demonstrates
 
 - ingestion and normalization of heterogeneous energy time series
 - PostgreSQL schema and analysis-view design
+- leakage-safe 24-hour load forecasting with chronological evaluation
 - physically validated battery dispatch simulation
 - rule-based control compared with mathematical optimization
 - reproducible, parallelized capacity-sensitivity experiments
 
 ## Key Results
+
+### Battery Optimization
 
 ![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/assets/strategy_comparison_1000kwh.png)
 
@@ -36,21 +42,39 @@ dynamic-price scenarios use the dynamic-price baseline. See the
 sensitivity, utilization, runtime, feasibility checks, and a 48-hour dispatch
 comparison.
 
+### Load Forecasting
+
+- The fixed histogram gradient boosting model achieves `22.67 kWh` MAE,
+  `33.49 kWh` RMSE, and `8.21%` WAPE on the held-out 2021 test period.
+- It reduces MAE by `38.8%` relative to Weekly Naive and `48.8%` relative to
+  Daily Naive.
+- Performance remains close to the Q4 2020 validation result of `22.10 kWh`
+  MAE, supporting generalization across the test year.
+- Errors remain highest during summer afternoons and increase from
+  `19.20 kWh` at the first forecast hour to `24.08 kWh` at hour 24.
+
+See the [load forecast results](docs/load_forecast_results.md) for the
+chronological evaluation design, model comparison, and error diagnostics.
+
 ## System Overview
 
 ```text
-Dryad building data + SMARD prices
-    -> PostgreSQL measurement schema and analysis views
-    -> heuristic / rolling-horizon LP dispatch
-    -> physical validation and experiment metrics
+Dryad building measurements
+    -> PostgreSQL normalization and hourly energy reconstruction
+       -> load forecasting
+          -> chronological validation and frozen 2021 test
+       -> battery simulation + SMARD prices
+          -> heuristic and rolling-horizon LP dispatch
+          -> physical validation and experiment metrics
 ```
 
 ## Data Sources
 
 The building source is the corrected `reduced_data.zip` version updated on
-February 26, 2025. This project uses its hourly electricity measurements for
-2021. The local archive size, approximately `320.16 MB`, matches that corrected
-Dryad release.
+February 26, 2025. Load forecasting uses hourly electricity measurements from
+June 2019 through 2021; the BESS experiments use the 2021 measurements. The
+local archive size, approximately `320.16 MB`, matches that corrected Dryad
+release.
 
 > Engel, Jens; Castellani, Andrea; Wollstadt, Patricia et al. (2025).
 > *A real-world energy management data set from a smart company building for
@@ -61,21 +85,6 @@ Dryad datasets are published under CC0; the citation is retained to credit the
 dataset authors. German day-ahead electricity prices are sourced from
 [SMARD](https://www.smard.de/home), operated by the German Federal Network
 Agency.
-
-## Modeling Approach
-
-The experiment compares:
-
-- a no-battery baseline
-- fixed-price surplus-only storage
-- dynamic-price surplus-only storage
-- dynamic-price storage with grid charging
-- heuristic and LP dispatch across `250-2000 kWh` capacities
-
-Both controllers use the same physical dispatch contract and validator. The
-battery has `95%` charge and discharge efficiency, a `0.03 EUR/kWh` discharged
-degradation proxy, and a `500 kW` limit for additional grid charging. Stored
-energy can serve local load but cannot be exported.
 
 ## Quick Start
 
@@ -90,12 +99,28 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 docker compose up -d
 python scripts/ingest_data.py
+```
+
+### Run Battery Experiments
+
+```bash
 python scripts/run_bess_experiments.py
 ```
 
-The ingestion and experiment settings are editable constants at the top of the
-two scripts. Experiment summaries are written to
+Battery settings are editable constants at the top of the experiment script.
+The summary is written to
 `results/bess_experiment_results.csv`.
+
+### Run Load Forecasting
+
+```bash
+python scripts/run_forecast_validation.py
+python scripts/run_forecast_final_test.py
+```
+
+Both commands write compact CSV summaries to `results/forecasting/`. Pass
+`--save-forecasts` only when the large row-level prediction and error table is
+needed. The final-test command reproduces the fixed 2021 result.
 
 `requirements.txt` contains the runtime dependencies. `requirements-dev.txt`
 adds test, notebook, and figure-generation tooling for local development.
@@ -114,17 +139,12 @@ network access, or PostgreSQL.
 ## Documentation
 
 | Document | Contents |
-|---|---|
+| --- | --- |
 | [Experiment results](docs/bess_experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
-| [Load forecast results](docs/load_forecast_results.md) | Baseline comparison and training-history validation results |
+| [Load forecast results](docs/load_forecast_results.md) | Method, validation, final 2021 results, and error diagnostics |
 | [Simulation methodology](docs/bess_simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
 | [Heuristic dispatch](docs/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
 | [LP optimization](docs/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
 
-## Limitations
-
-- The LP has perfect foresight inside each rolling horizon.
-- The model uses hourly rather than quarter-hour resolution.
-- Battery degradation is represented by a simplified throughput cost.
-- Forecast uncertainty and real-time command correction are not modeled.
-- Reported savings exclude BESS capex and demand charges.
+Detailed assumptions, scope boundaries, and limitations are documented with
+the corresponding methodology and results.

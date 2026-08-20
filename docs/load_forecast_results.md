@@ -1,53 +1,144 @@
 # Load Forecast Results
 
-This document records the first load-forecast validation before the final 2021
-test. It compares seasonal-naive baselines with a histogram gradient boosting
-(HGB) model for hourly reconstructed gross load.
+This document records the chronological validation and final 2021 test of the
+hourly gross-load forecasting workflow. It compares two seasonal-naive
+baselines with a histogram gradient boosting (HGB) model over a rolling
+24-hour horizon.
 
-## Validation Setup
+## Forecasting Task
 
-All forecasts use a 24-hour rolling horizon. The validation window is October
-through December 2020, comprising 2,184 forecast origins and 52,416 forecast
-rows per model. Daily Naive and Weekly Naive use the observed load from 24 and
-168 hours earlier, respectively.
+The target is reconstructed hourly building gross load. At every eligible
+forecast origin, each model produces one prediction for every horizon from one
+through 24 hours ahead.
 
-The HGB model uses the fixed initial configuration and leakage-safe load and
-calendar features, including Hessian public holidays, bridge days, and the
-observed annual company Christmas shutdown from 24 December through 2 January.
-It was evaluated with two training windows:
+Daily Naive uses the load observed 24 hours before each target timestamp.
+Weekly Naive uses the load observed 168 hours before it. The HGB model combines
+the forecast horizon with leakage-safe information available at the origin:
 
-| Training window | Trainable origins | Purpose |
-|---|---:|---|
-| January 2020 to September 2020 | 6,552 | Reference HGB run |
-| 2019 H2 to September 2020 | 10,850 | Extended-history HGB run |
+- target-calendar hour, weekday, weekend, month, holiday, bridge-day, and
+  Christmas-shutdown indicators
+- load at the origin and at one-hour, daily, and weekly lags
+- rolling 24-hour and 168-hour load statistics
+- load at the same target hour on the previous day and previous week
 
-The extended window starts on 29 June 2019 local time, the first timestamp at
-which PV, CHP, and total-load observations are complete. The 2021 data remains
-outside training and model selection.
+The fixed HGB configuration uses a `0.05` learning rate, `300` boosting
+iterations, `15` maximum leaf nodes, `20` minimum samples per leaf, and `1.0`
+L2 regularization. The reported model retains this fixed default configuration.
 
-## Results
+## Chronological Evaluation
 
-| Model | Training window | MAE | RMSE | Bias | WAPE |
-|---|---|---:|---:|---:|---:|
-| HGB | 2019 H2 to September 2020 | 22.10 kWh | 32.03 kWh | -0.06 kWh | 7.91% |
-| HGB | January 2020 to September 2020 | 25.61 kWh | 38.03 kWh | +12.97 kWh | 9.16% |
-| Weekly Naive | Seasonal naive | 36.81 kWh | 49.64 kWh | +6.47 kWh | 13.17% |
-| Daily Naive | Seasonal naive | 42.10 kWh | 67.35 kWh | +1.66 kWh | 15.06% |
+Model development and final testing use adjacent, non-overlapping UTC splits:
 
-Adding 2019 H2 reduces HGB MAE by 13.7% and WAPE by 1.26 percentage points
-relative to the reference HGB run. It also removes the material positive bias.
-The added history supplies examples of autumn, Christmas, holidays, and bridge
-days that are absent from the 2020-only target labels.
+| Stage | Training data | Evaluation period | Purpose |
+| --- | --- | --- | --- |
+| Validation | 28 June 2019 to 30 September 2020 | Q4 2020 | Fix the workflow and model choice |
+| Final test | 28 June 2019 to 31 December 2020 | 2021 | One-time generalization estimate |
 
-The Christmas-shutdown feature was evaluated as a controlled addition to the
-extended-history HGB. It improves MAE from 22.74 kWh to 22.10 kWh, WAPE from
-8.14% to 7.91%, and RMSE from 33.42 kWh to 32.03 kWh. The feature is derived
-only from the target's local calendar date and is available at every forecast
-origin.
+The training period starts at the first timestamp with complete PV, CHP, and
+total-load coverage. The HGB model is fitted once per stage. During evaluation,
+forecasts roll forward hourly and may use actual load observed through the
+current origin; they never use observations after that origin as features.
 
-## Decision
+The Q4 validation contains `2,184` origins and `52,416` origin-horizon rows per
+model. The final test contains `8,735` origins and `209,640` rows per model.
+Because the horizons overlap, these are forecast instances rather than the
+same number of independent target timestamps.
 
-Use the extended 2019 H2 to September 2020 window for the next forecasting
-experiments. Keep the 2021 test set untouched until feature and model choices
-are fixed. The comparison and error diagnostics can be reproduced in
-`notebooks/load_forecast_baselines.ipynb`.
+## Validation Results
+
+| Model | MAE | RMSE | Bias | WAPE |
+| --- | ---: | ---: | ---: | ---: |
+| HGB | **22.10 kWh** | **32.03 kWh** | **-0.05 kWh** | **7.91%** |
+| Weekly Naive | 36.81 kWh | 49.64 kWh | +6.47 kWh | 13.17% |
+| Daily Naive | 42.10 kWh | 67.35 kWh | +1.66 kWh | 15.06% |
+
+The HGB model provides the strongest validation result and removes the
+material positive bias of Weekly Naive. The model configuration and feature
+set were frozen before the 2021 test was evaluated.
+
+## Final 2021 Test Results
+
+| Model | MAE | RMSE | Bias | WAPE |
+| --- | ---: | ---: | ---: | ---: |
+| HGB | **22.67 kWh** | **33.49 kWh** | +1.99 kWh | **8.21%** |
+| Weekly Naive | 37.05 kWh | 52.08 kWh | +0.27 kWh | 13.42% |
+| Daily Naive | 44.29 kWh | 70.39 kWh | +0.01 kWh | 16.05% |
+
+On the final test, HGB reduces MAE by `38.82%` relative to Weekly Naive and by
+`48.83%` relative to Daily Naive. Its MAE is only `2.6%` higher than in Q4
+validation, while WAPE moves from `7.91%` to `8.21%`. The similar validation
+and test results support generalization beyond the original validation season.
+
+The positive HGB test bias of `1.99 kWh` indicates mild average overprediction,
+but it remains small relative to both the typical load and absolute forecast
+error.
+
+## Error Diagnostics
+
+### Month
+
+HGB outperforms both seasonal baselines in every test month. Its lowest monthly
+MAE is `17.26 kWh` in February, followed by `18.93 kWh` in December. Its highest
+monthly errors occur in June (`27.54 kWh`) and July (`26.80 kWh`).
+
+| Month | HGB MAE |
+| --- | ---: |
+| January | 22.66 kWh |
+| February | 17.26 kWh |
+| March | 22.02 kWh |
+| April | 21.11 kWh |
+| May | 19.98 kWh |
+| June | 27.54 kWh |
+| July | 26.80 kWh |
+| August | 24.41 kWh |
+| September | 24.53 kWh |
+| October | 22.01 kWh |
+| November | 24.38 kWh |
+| December | 18.93 kWh |
+
+### Local Hour
+
+The HGB error is lowest overnight, at approximately `14-16 kWh` MAE, and rises
+during working hours. It reaches `35.61 kWh` at 12:00 and peaks at `36.04 kWh`
+at 14:00. The model substantially improves on both baselines during these
+hours, but the remaining afternoon pattern is the clearest opportunity for
+additional explanatory features.
+
+### Forecast Horizon
+
+HGB MAE increases gradually from `19.20 kWh` at one hour ahead to `24.08 kWh`
+at 24 hours ahead. This expected degradation remains well below the Weekly
+Naive result throughout the horizon.
+
+## Scope and Limitations
+
+- The model produces point forecasts without prediction intervals.
+- Weather, temperature, occupancy, and production schedules are not available
+  as model features.
+- Rolling evaluation assumes the actual load through each forecast origin is
+  available; the model is not predicting the complete year in one operation.
+- Metrics aggregate overlapping origin-horizon forecasts, so adjacent rows are
+  not statistically independent.
+- The available UTC test data ends at `2021-12-31 22:00`, giving `8,759` raw
+  test observations and `8,735` complete 24-hour origins.
+- One flagged gross-load observation was interpolated in April 2020 during
+  training. No test target was imputed.
+- Further development based on the revealed 2021 errors requires a new
+  validation or holdout strategy rather than repeated selection on this test.
+
+The summer-afternoon error pattern suggests temperature as the most promising
+next feature, but that hypothesis was not tested in the reported result.
+
+## Reproduction
+
+Start PostgreSQL and ingest the source data as described in the project README,
+then run:
+
+```bash
+python scripts/run_forecast_validation.py
+python scripts/run_forecast_final_test.py
+```
+
+The scripts write compact overall, horizon, monthly, and hourly CSV summaries
+to `results/forecasting/`. Passing `--save-forecasts` additionally writes the
+large row-level prediction and error table.
