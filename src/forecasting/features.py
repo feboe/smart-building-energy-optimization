@@ -63,6 +63,8 @@ def build_forecast_features(
             forecast_timestamp = origin + pd.Timedelta(hours=horizon_hours)
             target_row = prepared_data.loc[forecast_timestamp]
             target_local_date = _local_date(target_row, config)
+            # With a horizon of at most 24 hours, both target-relative lags are
+            # observations at or before the origin and therefore cannot leak.
             row = {
                 "forecast_origin": origin,
                 "forecast_timestamp": forecast_timestamp,
@@ -110,6 +112,7 @@ def _validate_feature_input(
     forecast_origins: pd.DatetimeIndex,
     forecast_config: ForecastConfig,
 ) -> None:
+    """Enforce the prepared-data, history, and horizon feature contract."""
     if forecast_config.horizon_hours > MAX_LEAKAGE_SAFE_HORIZON_HOURS:
         raise ValueError(
             "Load features support at most a 24-hour horizon to prevent leakage."
@@ -159,6 +162,7 @@ def _local_date(target_row: pd.Series, forecast_config: ForecastConfig) -> objec
 
 
 def _is_bridge_day(local_date: object, holiday_dates: set[object]) -> bool:
+    """Identify Monday-before-Tuesday and Friday-after-Thursday bridge days."""
     if local_date in holiday_dates:
         return False
     if local_date.weekday() == 0:
@@ -180,6 +184,7 @@ def _validate_origin(
     origin: pd.Timestamp,
     forecast_config: ForecastConfig,
 ) -> None:
+    """Require all historical inputs and future labels needed for one origin."""
     if origin not in data_index:
         raise ValueError(
             f"Forecast origin is not present in prepared data: {origin.isoformat()}"
@@ -201,6 +206,7 @@ def _validate_origin(
 
 
 def _origin_load_features(target: pd.Series, origin: pd.Timestamp) -> dict[str, float]:
+    """Calculate load features using observations available by the origin."""
     recent_24_hours = target.loc[origin - pd.Timedelta(hours=23) : origin]
     recent_168_hours = target.loc[origin - pd.Timedelta(hours=167) : origin]
     return {

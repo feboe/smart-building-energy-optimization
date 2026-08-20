@@ -173,6 +173,7 @@ def _coerce_numeric_columns(
     prepared_df: pd.DataFrame,
     config: ForecastConfig,
 ) -> None:
+    """Require finite numeric target values while preserving missing-value flags."""
     for column in (config.target_column, config.raw_target_column):
         try:
             prepared_df[column] = pd.to_numeric(prepared_df[column], errors="raise")
@@ -189,6 +190,7 @@ def _raise_for_unresolved_targets(
     prepared_df: pd.DataFrame,
     config: ForecastConfig,
 ) -> None:
+    """Reject gaps that were unflagged or could not be safely interpolated."""
     unresolved_target_timestamps = prepared_df.index[
         prepared_df[config.target_column].isna()
     ]

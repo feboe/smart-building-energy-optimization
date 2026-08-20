@@ -221,6 +221,7 @@ def calculate_forecast_metrics(evaluated_forecasts: pd.DataFrame) -> pd.DataFram
 
 
 def _validate_forecasts(forecasts: pd.DataFrame) -> None:
+    """Validate the shared experiment-level forecast table contract."""
     required_columns = {"experiment_name", *FORECAST_COLUMNS}
     missing_columns = sorted(required_columns - set(forecasts.columns))
     if missing_columns:
@@ -265,6 +266,7 @@ def _aggregate_metrics(
     grouped_forecasts: pd.core.groupby.generic.DataFrameGroupBy,
     metric_scope: str,
 ) -> pd.DataFrame:
+    """Aggregate error columns for experiment/model and optional horizon groups."""
     rows: list[dict[str, object]] = []
     for group_key, group in grouped_forecasts:
         experiment_name, model_name, horizon_hours = _unpack_group_key(group_key)
@@ -285,6 +287,7 @@ def _aggregate_metrics(
 
 
 def _unpack_group_key(group_key: object) -> tuple[str, str, int | None]:
+    """Normalize overall and per-horizon pandas group keys."""
     if not isinstance(group_key, tuple):
         raise ValueError("Forecast metric groups must include an experiment name.")
     if len(group_key) == 2:
@@ -293,7 +296,9 @@ def _unpack_group_key(group_key: object) -> tuple[str, str, int | None]:
 
 
 def _calculate_wape_percent(forecasts: pd.DataFrame) -> float:
+    """Return absolute error as a percentage of total absolute actual energy."""
     actual_energy = forecasts["actual_kwh"].abs().sum()
+    # WAPE has no meaningful denominator when the total actual energy is zero.
     if actual_energy == 0:
         return float("nan")
     return 100 * forecasts["absolute_error_kwh"].sum() / actual_energy

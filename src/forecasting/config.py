@@ -35,6 +35,7 @@ class ForecastExperimentConfig:
     def __post_init__(self) -> None:
         if not self.name:
             raise ValueError("Forecast experiment name must not be empty.")
+        # Overlapping labels would let training observe the evaluation period.
         if self.training_split.end > self.evaluation_split.start:
             raise ValueError(
                 "Forecast training split must end before or when the evaluation "

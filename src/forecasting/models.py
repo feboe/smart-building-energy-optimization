@@ -105,6 +105,7 @@ def _seasonal_naive_forecast(
     model_name: str,
     seasonal_lag_hours: int,
 ) -> pd.DataFrame:
+    """Apply a fixed seasonal lag using the shared forecast output contract."""
     validate_prepared_forecasting_data(prepared_data, forecast_config)
     origins = validate_forecast_origins(forecast_origins, prepared_data.index)
 
@@ -149,6 +150,7 @@ def _validate_forecast_timestamps(
     source_timestamp: pd.Timestamp,
     seasonal_lag_hours: int,
 ) -> None:
+    """Ensure a seasonal forecast has both its label and lagged observation."""
     if forecast_timestamp not in data_index:
         raise ValueError(
             f"Forecast from {origin.isoformat()} does not have a complete "
