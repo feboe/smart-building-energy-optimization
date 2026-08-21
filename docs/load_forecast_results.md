@@ -64,10 +64,13 @@ set were frozen before the 2021 test was evaluated.
 | Weekly Naive | 37.05 kWh | 52.08 kWh | +0.27 kWh | 13.42% |
 | Daily Naive | 44.29 kWh | 70.39 kWh | +0.01 kWh | 16.05% |
 
-On the final test, HGB reduces MAE by `38.82%` relative to Weekly Naive and by
-`48.83%` relative to Daily Naive. Its MAE is only `2.6%` higher than in Q4
-validation, while WAPE moves from `7.91%` to `8.21%`. The similar validation
-and test results support generalization beyond the original validation season.
+![Final 2021 load-forecast model comparison](assets/load_forecast_model_comparison.png)
+
+On the final test, HGB reduces both MAE and WAPE by `38.82%` relative to Weekly
+Naive and by `48.83%` relative to Daily Naive. Its MAE is only `2.6%` higher
+than in Q4 validation, while WAPE moves from `7.91%` to `8.21%`. The similar
+validation and test results support generalization beyond the original
+validation season.
 
 The positive HGB test bias of `1.99 kWh` indicates mild average overprediction,
 but it remains small relative to both the typical load and absolute forecast
@@ -75,40 +78,52 @@ error.
 
 ## Error Diagnostics
 
+### Representative Forecast
+
+![Representative HGB 24-hour forecast](assets/load_forecast_representative_horizon.png)
+
+The displayed origin is selected reproducibly as the 24-hour HGB forecast
+whose aggregated WAPE is closest to the median origin WAPE. Its `7.35%` WAPE is
+therefore a representative example rather than a hand-picked best case.
+
 ### Month
 
-HGB outperforms both seasonal baselines in every test month. Its lowest monthly
-MAE is `17.26 kWh` in February, followed by `18.93 kWh` in December. Its highest
-monthly errors occur in June (`27.54 kWh`) and July (`26.80 kWh`).
+![HGB error by month and local hour](assets/load_forecast_error_heatmap.png)
 
-| Month | HGB MAE |
+HGB outperforms both seasonal baselines in every test month. Its lowest monthly
+WAPE is `6.02%` in February, followed by `7.54%` in December. Its highest
+monthly WAPE occurs in June (`9.22%`) and November (`9.06%`).
+
+| Month | HGB WAPE |
 | --- | ---: |
-| January | 22.66 kWh |
-| February | 17.26 kWh |
-| March | 22.02 kWh |
-| April | 21.11 kWh |
-| May | 19.98 kWh |
-| June | 27.54 kWh |
-| July | 26.80 kWh |
-| August | 24.41 kWh |
-| September | 24.53 kWh |
-| October | 22.01 kWh |
-| November | 24.38 kWh |
-| December | 18.93 kWh |
+| January | 8.34% |
+| February | 6.02% |
+| March | 7.88% |
+| April | 8.09% |
+| May | 8.03% |
+| June | 9.22% |
+| July | 8.82% |
+| August | 8.55% |
+| September | 8.61% |
+| October | 8.08% |
+| November | 9.06% |
+| December | 7.54% |
 
 ### Local Hour
 
-The HGB error is lowest overnight, at approximately `14-16 kWh` MAE, and rises
-during working hours. It reaches `35.61 kWh` at 12:00 and peaks at `36.04 kWh`
-at 14:00. The model substantially improves on both baselines during these
-hours, but the remaining afternoon pattern is the clearest opportunity for
-additional explanatory features.
+The HGB error is lowest around 06:00 at `5.75%` WAPE and rises during working
+hours. It reaches `10.57%` at 12:00 and peaks at `10.91%` at 15:00. The model
+substantially improves on both baselines during these hours, but the remaining
+afternoon pattern is the clearest opportunity for additional explanatory
+features.
 
 ### Forecast Horizon
 
-HGB MAE increases gradually from `19.20 kWh` at one hour ahead to `24.08 kWh`
-at 24 hours ahead. This expected degradation remains well below the Weekly
-Naive result throughout the horizon.
+![HGB, Weekly Naive, and Daily Naive error by forecast horizon](assets/load_forecast_horizon_error.png)
+
+HGB WAPE increases gradually from `6.96%` at one hour ahead to `8.73%` at 24
+hours ahead. This expected degradation remains well below Weekly Naive
+(`13.41-13.44%`) and Daily Naive (`16.03-16.06%`) throughout the horizon.
 
 ## Scope and Limitations
 
@@ -128,17 +143,3 @@ Naive result throughout the horizon.
 
 The summer-afternoon error pattern suggests temperature as the most promising
 next feature, but that hypothesis was not tested in the reported result.
-
-## Reproduction
-
-Start PostgreSQL and ingest the source data as described in the project README,
-then run:
-
-```bash
-python scripts/run_forecast_validation.py
-python scripts/run_forecast_final_test.py
-```
-
-The scripts write compact overall, horizon, monthly, and hourly CSV summaries
-to `results/forecasting/`. Passing `--save-forecasts` additionally writes the
-large row-level prediction and error table.

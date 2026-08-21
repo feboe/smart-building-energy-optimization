@@ -44,14 +44,11 @@ comparison.
 
 ### Load Forecasting
 
-- The fixed histogram gradient boosting model achieves `22.67 kWh` MAE,
-  `33.49 kWh` RMSE, and `8.21%` WAPE on the held-out 2021 test period.
-- It reduces MAE by `38.8%` relative to Weekly Naive and `48.8%` relative to
-  Daily Naive.
-- Performance remains close to the Q4 2020 validation result of `22.10 kWh`
-  MAE, supporting generalization across the test year.
-- Errors remain highest during summer afternoons and increase from
-  `19.20 kWh` at the first forecast hour to `24.08 kWh` at hour 24.
+![Final 2021 load-forecast model comparison](docs/assets/load_forecast_model_comparison.png)
+
+The fixed HGB model achieves `8.21%` WAPE on the held-out 2021 test period,
+with performance close to its Q4 2020 validation result. Error analysis shows
+that summer working hours remain the clearest opportunity for improvement.
 
 See the [load forecast results](docs/load_forecast_results.md) for the
 chronological evaluation design, model comparison, and error diagnostics.
