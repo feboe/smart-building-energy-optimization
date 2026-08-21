@@ -1,6 +1,6 @@
 """Tests for SMARD chart-data URL helpers."""
 
-from src.smard_client import SmardConfig, build_index_url, build_payload_url
+from src.ingestion.smard_client import SmardConfig, build_index_url, build_payload_url
 
 
 def test_smard_client_builds_index_and_payload_urls() -> None:

@@ -12,14 +12,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import load_database_config
-from src.csv_pipeline import ingest_csv_archive
 from src.database import (
     create_analysis_views,
     create_quality_views,
     create_tables,
     open_connection,
 )
-from src.smard_pipeline import DAY_AHEAD_PRICE, ingest_smard_series
+from src.ingestion.csv_pipeline import ingest_csv_archive
+from src.ingestion.smard_pipeline import DAY_AHEAD_PRICE, ingest_smard_series
 
 ARCHIVE_PATH = PROJECT_ROOT / "data" / "reduced_data.zip"
 RESOLUTION = "1h"

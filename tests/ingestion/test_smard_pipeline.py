@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from src.database import MEASUREMENT_COLUMNS
-from src.smard_client import SmardConfig
-from src.smard_pipeline import (
+from src.ingestion.smard_client import SmardConfig
+from src.ingestion.smard_pipeline import (
     SmardSeries,
     extract_measurements,
     filter_chunk_timestamps,

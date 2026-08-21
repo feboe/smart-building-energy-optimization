@@ -8,8 +8,12 @@ from zipfile import ZipFile
 import pandas as pd
 import pytest
 
-from src.csv_pipeline import extract_measurements, filter_table_for_period, read_csv_table
 from src.database import MEASUREMENT_COLUMNS
+from src.ingestion.csv_pipeline import (
+    extract_measurements,
+    filter_table_for_period,
+    read_csv_table,
+)
 
 
 def _write_csv_archive(

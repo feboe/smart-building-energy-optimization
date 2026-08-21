@@ -14,7 +14,12 @@ from src.database import (
     insert_measurements,
     open_connection,
 )
-from src.smard_client import SmardConfig, build_index_url, get_payload, get_timestamps
+from src.ingestion.smard_client import (
+    SmardConfig,
+    build_index_url,
+    get_payload,
+    get_timestamps,
+)
 
 SOURCE_SYSTEM = "SMARD"
 LOCAL_TIMEZONE = ZoneInfo("Europe/Berlin")
