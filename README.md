@@ -24,7 +24,7 @@ production EMS software.
 
 ### Battery Optimization
 
-![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/assets/strategy_comparison_1000kwh.png)
+![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/battery/assets/strategy_comparison_1000kwh.png)
 
 - The site already self-consumes about `92%` of local PV and CHP generation.
 - The best tested `1000 kWh` case saves about `13.4k EUR/year` in simulated
@@ -38,19 +38,19 @@ Savings exclude BESS purchase, installation, financing, maintenance, demand
 charges, and replacement costs. Savings are measured against the corresponding
 no-battery baseline: fixed-price scenarios use the fixed-price baseline, while
 dynamic-price scenarios use the dynamic-price baseline. See the
-[full experiment results](docs/bess_experiment_results.md) for capacity
+[full experiment results](docs/battery/experiment_results.md) for capacity
 sensitivity, utilization, runtime, feasibility checks, and a 48-hour dispatch
 comparison.
 
 ### Load Forecasting
 
-![Final 2021 load-forecast model comparison](docs/assets/load_forecast_model_comparison.png)
+![Final 2021 load-forecast model comparison](docs/forecasting/assets/load_forecast_model_comparison.png)
 
 The fixed HGB model achieves `8.21%` WAPE on the held-out 2021 test period,
 with performance close to its Q4 2020 validation result. Error analysis shows
 that summer working hours remain the clearest opportunity for improvement.
 
-See the [load forecast results](docs/load_forecast_results.md) for the
+See the [load forecast results](docs/forecasting/results.md) for the
 chronological evaluation design, model comparison, and error diagnostics.
 
 ## System Overview
@@ -106,7 +106,7 @@ python scripts/run_bess_experiments.py
 
 Battery settings are editable constants at the top of the experiment script.
 The summary is written to
-`results/bess_experiment_results.csv`.
+`results/battery/experiment_results.csv`.
 
 ### Run Load Forecasting
 
@@ -137,11 +137,11 @@ network access, or PostgreSQL.
 
 | Document | Contents |
 | --- | --- |
-| [Experiment results](docs/bess_experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
-| [Load forecast results](docs/load_forecast_results.md) | Method, validation, final 2021 results, and error diagnostics |
-| [Simulation methodology](docs/bess_simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
-| [Heuristic dispatch](docs/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
-| [LP optimization](docs/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
+| [Battery experiment results](docs/battery/experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
+| [Battery simulation methodology](docs/battery/simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
+| [Heuristic dispatch](docs/battery/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
+| [LP optimization](docs/battery/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
+| [Load forecast results](docs/forecasting/results.md) | Method, validation, final 2021 results, and error diagnostics |
 
 Detailed assumptions, scope boundaries, and limitations are documented with
 the corresponding methodology and results.

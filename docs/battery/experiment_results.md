@@ -6,7 +6,7 @@ rolling-horizon linear program (LP), then examines how the results change with
 battery capacity.
 
 The physical model and economic assumptions are described in
-[`bess_simulation_methodology.md`](bess_simulation_methodology.md). The
+[`simulation_methodology.md`](simulation_methodology.md). The
 controller details are documented in
 [`heuristic_dispatch.md`](heuristic_dispatch.md) and
 [`lp_optimization.md`](lp_optimization.md).

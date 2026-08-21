@@ -31,7 +31,7 @@ from src.battery.scenarios import (
 EXPERIMENT_NAME = "capacity_sensitivity"
 CAPACITIES_KWH = [250, 500, 1000, 2000]
 MAX_PARALLEL_WORKERS = min(4, os.cpu_count() or 1)
-RESULTS_PATH = PROJECT_ROOT / "results" / "bess_experiment_results.csv"
+RESULTS_PATH = PROJECT_ROOT / "results" / "battery" / "experiment_results.csv"
 
 C_RATE = 0.5
 MIN_SOC_FRACTION = 0.10
