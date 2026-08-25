@@ -1,4 +1,6 @@
 DROP VIEW IF EXISTS smart_company_forecasting;
+DROP VIEW IF EXISTS smart_company_analysis_hourly;
+DROP VIEW IF EXISTS smart_company_analysis_15min;
 DROP VIEW IF EXISTS smart_company_analysis;
 DROP VIEW IF EXISTS electricity_p_calendar;
 DROP VIEW IF EXISTS electricity_p_calendar_all;
@@ -48,6 +50,12 @@ electricity_p_load AS (
         observation_timestamp,
         region,
         resolution,
+        CASE
+            WHEN resolution = 'hour' THEN 1.0
+            WHEN resolution IN ('15min', '15 minutes') THEN 0.25
+            WHEN resolution IN ('1min', 'minute') THEN 1.0 / 60.0
+            ELSE NULL
+        END AS timestep_hours,
         total_w,
         pv_w_raw,
         pv_w,
@@ -78,49 +86,60 @@ electricity_p_load AS (
 day_ahead_prices AS (
     SELECT
         observation_timestamp,
-        resolution,
         MAX(value) AS day_ahead_price_eur_per_mwh
     FROM measurements
     WHERE source_system = 'SMARD'
         AND series_name = 'day_ahead_price'
-    GROUP BY observation_timestamp, resolution
+        AND resolution = 'hour'
+    GROUP BY observation_timestamp
 )
 SELECT
     load.source_system,
     load.observation_timestamp,
     load.region,
     load.resolution,
+    load.timestep_hours,
     load.total_w,
     load.pv_w,
     load.chp_w,
     load.gross_load_w,
-    load.total_w / 1000 AS grid_energy_kwh,
+    load.total_w / 1000 AS grid_power_kw,
+    load.gross_load_w / 1000 AS gross_load_kw,
+    load.pv_generation_w / 1000 AS pv_generation_kw,
+    load.chp_generation_w / 1000 AS chp_generation_kw,
+    load.total_w / 1000 * load.timestep_hours AS grid_energy_kwh,
     CASE
-        WHEN load.total_w > 0 THEN load.total_w / 1000
+        WHEN load.total_w > 0
+            THEN load.total_w / 1000 * load.timestep_hours
         WHEN load.total_w <= 0 THEN 0
         ELSE NULL
     END AS grid_import_kwh,
     CASE
-        WHEN load.total_w < 0 THEN -load.total_w / 1000
+        WHEN load.total_w < 0
+            THEN -load.total_w / 1000 * load.timestep_hours
         WHEN load.total_w >= 0 THEN 0
         ELSE NULL
     END AS grid_export_kwh,
-    load.pv_generation_w / 1000 AS pv_generation_kwh,
-    load.chp_generation_w / 1000 AS chp_generation_kwh,
+    load.pv_generation_w / 1000 * load.timestep_hours AS pv_generation_kwh,
+    load.chp_generation_w / 1000 * load.timestep_hours AS chp_generation_kwh,
     prices.day_ahead_price_eur_per_mwh,
     prices.day_ahead_price_eur_per_mwh / 1000 AS day_ahead_price_eur_per_kwh,
     load.pv_w_raw,
     load.pv_w_raw IS DISTINCT FROM load.pv_w AS pv_w_was_cleaned
 FROM electricity_p_load load
 LEFT JOIN day_ahead_prices prices
-    ON prices.observation_timestamp = load.observation_timestamp
-    AND prices.resolution = load.resolution;
+    ON prices.observation_timestamp = (
+        DATE_TRUNC(
+            'hour',
+            load.observation_timestamp AT TIME ZONE 'UTC'
+        ) AT TIME ZONE 'UTC'
+    );
 
 
 CREATE OR REPLACE VIEW electricity_p_clean AS
 SELECT
     reconstructed.*,
-    reconstructed.gross_load_w / 1000 AS gross_load_kwh
+    reconstructed.gross_load_kw * reconstructed.timestep_hours AS gross_load_kwh
 FROM electricity_p_reconstructed reconstructed
 WHERE reconstructed.gross_load_w IS NULL OR reconstructed.gross_load_w >= -100;
 
@@ -147,7 +166,7 @@ FROM electricity_p_reconstructed reconstructed;
 CREATE OR REPLACE VIEW electricity_p_calendar AS
 SELECT
     calendar.*,
-    calendar.gross_load_w / 1000 AS gross_load_kwh
+    calendar.gross_load_kw * calendar.timestep_hours AS gross_load_kwh
 FROM electricity_p_calendar_all calendar
 WHERE calendar.gross_load_w IS NULL OR calendar.gross_load_w >= -100;
 
@@ -155,29 +174,52 @@ WHERE calendar.gross_load_w IS NULL OR calendar.gross_load_w >= -100;
 CREATE OR REPLACE VIEW smart_company_forecasting AS
 SELECT
     calendar.*,
-    calendar.gross_load_w / 1000 AS gross_load_raw_kwh,
+    calendar.gross_load_kw * calendar.timestep_hours AS gross_load_raw_kwh,
     CASE
         WHEN calendar.gross_load_w IS NULL OR calendar.gross_load_w < -100 THEN NULL
-        ELSE calendar.gross_load_w / 1000
+        ELSE calendar.gross_load_kw * calendar.timestep_hours
     END AS gross_load_kwh,
     CASE
         WHEN calendar.gross_load_w IS NULL THEN 'missing_gross_load'
         WHEN calendar.gross_load_w < -100 THEN 'negative_gross_load'
         ELSE NULL
     END AS gross_load_quality_issue
-FROM electricity_p_calendar_all calendar;
+FROM electricity_p_calendar_all calendar
+WHERE calendar.resolution = 'hour';
 
 
 CREATE OR REPLACE VIEW smart_company_analysis AS
 SELECT
     observation_timestamp,
     local_timestamp,
+    resolution,
+    timestep_hours,
     total_w,
     pv_w,
     chp_w,
     pv_w_raw,
     pv_w_was_cleaned,
-    gross_load_kwh,
+    gross_load_w AS gross_load_raw_w,
+    CASE
+        WHEN gross_load_w IS NULL OR gross_load_w < -100 THEN NULL
+        ELSE gross_load_w
+    END AS gross_load_w,
+    CASE
+        WHEN gross_load_w IS NULL THEN 'missing_gross_load'
+        WHEN gross_load_w < -100 THEN 'negative_gross_load'
+        ELSE NULL
+    END AS gross_load_quality_issue,
+    grid_power_kw,
+    CASE
+        WHEN gross_load_w IS NULL OR gross_load_w < -100 THEN NULL
+        ELSE gross_load_kw
+    END AS gross_load_kw,
+    pv_generation_kw,
+    chp_generation_kw,
+    CASE
+        WHEN gross_load_w IS NULL OR gross_load_w < -100 THEN NULL
+        ELSE gross_load_kw * timestep_hours
+    END AS gross_load_kwh,
     grid_energy_kwh,
     grid_import_kwh,
     grid_export_kwh,
@@ -188,5 +230,17 @@ SELECT
     local_hour,
     local_isodow,
     is_weekend
-FROM electricity_p_calendar
+FROM electricity_p_calendar_all
 WHERE local_year = 2021;
+
+
+CREATE OR REPLACE VIEW smart_company_analysis_hourly AS
+SELECT *
+FROM smart_company_analysis
+WHERE resolution = 'hour';
+
+
+CREATE OR REPLACE VIEW smart_company_analysis_15min AS
+SELECT *
+FROM smart_company_analysis
+WHERE resolution IN ('15min', '15 minutes');

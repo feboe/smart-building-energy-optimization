@@ -19,12 +19,22 @@ def make_analysis_df() -> Callable[[list[dict]], pd.DataFrame]:
                 "local_timestamp": (base_timestamp + pd.Timedelta(hours=offset))
                 .tz_convert("Europe/Berlin")
                 .tz_localize(None),
+                "resolution": "hour",
+                "timestep_hours": 1.0,
                 "total_w": 0.0,
                 "pv_w": 0.0,
                 "chp_w": 0.0,
                 "day_ahead_price_eur_per_kwh": 0.1,
             }
             record.update(row)
+            pv_generation_w = max(-float(record["pv_w"]), 0.0)
+            chp_generation_w = max(-float(record["chp_w"]), 0.0)
+            gross_load_w = (
+                float(record["total_w"]) + pv_generation_w + chp_generation_w
+            )
+            record.setdefault("gross_load_raw_w", gross_load_w)
+            record.setdefault("gross_load_w", gross_load_w)
+            record.setdefault("gross_load_quality_issue", None)
             records.append(record)
 
         return pd.DataFrame(records)

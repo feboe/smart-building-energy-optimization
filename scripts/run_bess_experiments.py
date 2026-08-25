@@ -29,6 +29,7 @@ from src.battery.scenarios import (
 )
 
 EXPERIMENT_NAME = "capacity_sensitivity"
+ANALYSIS_RESOLUTION = "hour"
 CAPACITIES_KWH = [250, 500, 1000, 2000]
 MAX_PARALLEL_WORKERS = min(4, os.cpu_count() or 1)
 RESULTS_PATH = PROJECT_ROOT / "results" / "battery" / "experiment_results.csv"
@@ -76,7 +77,7 @@ def main() -> None:
     run_timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
     script_start_time = perf_counter()
     print("Loading smart-company analysis data...")
-    analysis_df = load_smart_company_analysis()
+    analysis_df = load_smart_company_analysis(resolution=ANALYSIS_RESOLUTION)
     print(f"Loaded {len(analysis_df):,} rows.")
 
     results_df = run_capacity_sensitivity(

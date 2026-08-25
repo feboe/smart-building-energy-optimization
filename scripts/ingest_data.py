@@ -22,13 +22,13 @@ from src.ingestion.csv_pipeline import ingest_csv_archive
 from src.ingestion.smard_pipeline import DAY_AHEAD_PRICE, ingest_smard_series
 
 ARCHIVE_PATH = PROJECT_ROOT / "data" / "reduced_data.zip"
-RESOLUTION = "1h"
-START_DATE = datetime(2019, 6, 29)
-END_DATE = datetime(2021, 12, 31, 23)
+RESOLUTION = "15min"
+START_DATE = datetime(2021, 1, 1, 0, 0)
+END_DATE = datetime(2021, 12, 31, 23, 45)
 
 RUN_CSV_INGEST = True
-RUN_SMARD_INGEST = True
-CREATE_VIEWS = True
+RUN_SMARD_INGEST = False
+CREATE_VIEWS = False
 
 
 def main() -> None:
