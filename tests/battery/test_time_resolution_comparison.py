@@ -1,7 +1,7 @@
 """Integration checks for the short time-resolution comparison runner."""
 
-from scripts.run_time_resolution_comparison import (
-    run_time_resolution_comparison,
+from scripts.battery.run_resolution_comparison import (
+    run_bess_resolution_comparison,
     select_time_window,
 )
 
@@ -32,7 +32,7 @@ def test_resolution_comparison_contains_all_standard_methods(
         ]
     )
 
-    result_df = run_time_resolution_comparison(
+    result_df = run_bess_resolution_comparison(
         {"hour": hourly_df, "15min": quarter_hour_df},
         capacities_kwh=[1000],
         run_timestamp="2021-01-01T00:00:00+00:00",
@@ -44,6 +44,17 @@ def test_resolution_comparison_contains_all_standard_methods(
     assert set(result_df["timestep_hours"]) == {0.25, 1.0}
     assert set(result_df["method"]) == {"baseline", "heuristic", "lp_optimization"}
     assert set(result_df["experiment_name"]) == {"time_resolution_comparison"}
+    hourly_result = result_df[result_df["resolution"] == "hour"]
+    quarter_hour_result = result_df[result_df["resolution"] == "15min"]
+    assert set(hourly_result["analysis_start_utc"]) == {"2021-01-01T00:00:00+00:00"}
+    assert set(hourly_result["analysis_end_utc_exclusive"]) == {
+        "2021-01-01T02:00:00+00:00"
+    }
+    assert set(hourly_result["simulation_rows"]) == {2}
+    assert set(quarter_hour_result["analysis_end_utc_exclusive"]) == {
+        "2021-01-01T00:30:00+00:00"
+    }
+    assert set(quarter_hour_result["simulation_rows"]) == {2}
 
 
 def test_select_time_window_uses_a_common_half_open_period(make_analysis_df) -> None:
