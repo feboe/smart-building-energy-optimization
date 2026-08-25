@@ -101,18 +101,26 @@ python scripts/ingest_data.py
 ### Run Battery Experiments
 
 ```bash
-python scripts/run_bess_experiments.py
+# Hourly capacity-sensitivity experiment
+python scripts/battery/run_experiments.py
+
+# Short 7-day resolution comparison (default)
+python scripts/battery/run_resolution_comparison.py
+
+# Full-year resolution comparison
+python scripts/battery/run_resolution_comparison.py --days 365
 ```
 
 Battery settings are editable constants at the top of the experiment script.
-The summary is written to
-`results/battery/experiment_results.csv`.
+The capacity summary is written to `results/battery/experiment_results.csv`;
+the resolution comparison writes
+`results/battery/time_resolution_comparison.csv`.
 
 ### Run Load Forecasting
 
 ```bash
-python scripts/run_forecast_validation.py
-python scripts/run_forecast_final_test.py
+python scripts/forecasting/run_validation.py
+python scripts/forecasting/run_final_test.py
 ```
 
 Both commands write compact CSV summaries to `results/forecasting/`. Pass
