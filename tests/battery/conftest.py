@@ -13,10 +13,11 @@ def make_analysis_df() -> Callable[[list[dict]], pd.DataFrame]:
     def _make_analysis_df(rows: list[dict]) -> pd.DataFrame:
         base_timestamp = pd.Timestamp("2021-01-01 00:00:00", tz="UTC")
         records = []
-        for offset, row in enumerate(rows):
+        observation_timestamp = base_timestamp
+        for row in rows:
             record = {
-                "observation_timestamp": base_timestamp + pd.Timedelta(hours=offset),
-                "local_timestamp": (base_timestamp + pd.Timedelta(hours=offset))
+                "observation_timestamp": observation_timestamp,
+                "local_timestamp": observation_timestamp
                 .tz_convert("Europe/Berlin")
                 .tz_localize(None),
                 "resolution": "hour",
@@ -36,6 +37,7 @@ def make_analysis_df() -> Callable[[list[dict]], pd.DataFrame]:
             record.setdefault("gross_load_w", gross_load_w)
             record.setdefault("gross_load_quality_issue", None)
             records.append(record)
+            observation_timestamp += pd.Timedelta(hours=record["timestep_hours"])
 
         return pd.DataFrame(records)
 

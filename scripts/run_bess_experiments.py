@@ -385,6 +385,7 @@ def _baseline_row(
         "soc_range_utilization": 0.0,
         "surplus_capture_ratio": 0.0,
         "peak_grid_import_kwh": baseline_metrics["baseline_peak_grid_import_kwh"],
+        "peak_grid_import_kw": baseline_metrics["baseline_peak_grid_import_kw"],
         "self_consumption_ratio": baseline_metrics["baseline_self_consumption_ratio"],
         "self_consumption_improvement": 0.0,
         "fixed_import_price_eur_per_kwh": baseline_metrics[

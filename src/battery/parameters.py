@@ -16,7 +16,7 @@ VALID_DISPATCH_STRATEGIES = {
 
 @dataclass(frozen=True)
 class BatteryParameters:
-    """Physical battery assumptions for hourly simulations."""
+    """Physical battery assumptions for time-step-independent simulations."""
 
     capacity_kwh: float
     c_rate: float

@@ -8,6 +8,7 @@ import pulp
 from src.battery.data import prepare_simulation_data
 from src.battery.dispatch import (
     DISPATCH_COLUMNS,
+    horizon_steps,
     max_charge_input_kwh,
     max_discharge_to_load_kwh,
     validate_dispatch_results,
@@ -39,8 +40,10 @@ def run_optimized_dispatch(
     fixed_price = fixed_import_price(prepared_df, scenario)
 
     records = []
+    timestep_hours = float(prepared_df["timestep_hours"].iloc[0])
+    planning_steps = horizon_steps(scenario.horizon_hours, timestep_hours)
     for index in range(len(prepared_df)):
-        horizon_df = prepared_df.iloc[index : index + scenario.horizon_hours].reset_index(
+        horizon_df = prepared_df.iloc[index : index + planning_steps].reset_index(
             drop=True
         )
         solution = _solve_horizon(
@@ -129,6 +132,7 @@ def _solve_horizon(
         row = horizon_df.iloc[step]
         available_surplus_kwh = float(row["available_surplus_kwh"])
         demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
+        timestep_hours = float(row["timestep_hours"])
         previous_soc = horizon_initial_soc_kwh if step == 0 else soc[step - 1]
 
         model += (
@@ -147,17 +151,19 @@ def _solve_horizon(
             discharge_to_load[step] <= demand_after_generation_kwh
         ), f"load_discharge_limit_{step}"
         model += (
-            discharge_to_load[step] <= battery.max_discharge_power_kw
+            discharge_to_load[step]
+            <= battery.max_discharge_power_kw * timestep_hours
         ), f"discharge_power_limit_{step}"
         model += (
             charge_from_surplus[step] + charge_from_grid[step]
-            <= battery.max_charge_power_kw
+            <= battery.max_charge_power_kw * timestep_hours
         ), f"charge_power_limit_{step}"
 
         if allow_grid_charging:
             grid_charge_limit = _grid_connection_charge_limit_kwh(
                 remaining_deficit_kwh=demand_after_generation_kwh,
                 scenario=scenario,
+                timestep_hours=timestep_hours,
             )
             model += (
                 charge_from_grid[step] <= grid_charge_limit
@@ -206,8 +212,9 @@ def _build_dispatch_record(
     available_surplus_kwh = float(row["available_surplus_kwh"])
     demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
     current_price = float(row["dynamic_import_price_eur_per_kwh"])
+    timestep_hours = float(row["timestep_hours"])
 
-    max_charge_kwh = max_charge_input_kwh(soc_start_kwh, battery)
+    max_charge_kwh = max_charge_input_kwh(soc_start_kwh, battery, timestep_hours)
     charge_from_surplus_kwh = _clean_bound_value(
         solution["charge_from_surplus_kwh"],
         lower_bound=0.0,
@@ -223,7 +230,7 @@ def _build_dispatch_record(
         lower_bound=0.0,
         upper_bound=min(
             demand_after_generation_kwh,
-            max_discharge_to_load_kwh(soc_start_kwh, battery),
+            max_discharge_to_load_kwh(soc_start_kwh, battery, timestep_hours),
         ),
     )
     battery_charge_kwh = _clean_value(charge_from_surplus_kwh + charge_from_grid_kwh)
@@ -249,6 +256,7 @@ def _build_dispatch_record(
     return {
         "observation_timestamp": row["observation_timestamp"],
         "local_timestamp": row["local_timestamp"],
+        "timestep_hours": timestep_hours,
         "gross_load_kwh": row["gross_load_kwh"],
         "local_generation_kwh": row["local_generation_kwh"],
         "available_surplus_kwh": available_surplus_kwh,

@@ -32,6 +32,9 @@ def calculate_baseline_metrics(
     total_generation_kwh = float(prepared_df["local_generation_kwh"].sum())
     grid_import_kwh = float(prepared_df["grid_import_kwh"].sum())
     grid_export_kwh = float(prepared_df["grid_export_kwh"].sum())
+    peak_grid_import_kw = float(
+        (prepared_df["grid_import_kwh"] / prepared_df["timestep_hours"]).max()
+    )
 
     dynamic_grid_import_cost_eur = float(
         (
@@ -62,6 +65,7 @@ def calculate_baseline_metrics(
         "baseline_grid_import_kwh": grid_import_kwh,
         "baseline_grid_export_kwh": grid_export_kwh,
         "baseline_peak_grid_import_kwh": float(prepared_df["grid_import_kwh"].max()),
+        "baseline_peak_grid_import_kw": peak_grid_import_kw,
         "baseline_self_consumption_ratio": self_consumption_ratio,
         "total_load_kwh": total_load_kwh,
         "total_generation_kwh": total_generation_kwh,
@@ -89,6 +93,9 @@ def calculate_dispatch_metrics(
     total_generation_kwh = float(prepared_df["local_generation_kwh"].sum())
     grid_import_kwh = float(dispatch_df["grid_import_kwh"].sum())
     grid_export_kwh = float(dispatch_df["grid_export_kwh"].sum())
+    peak_grid_import_kw = float(
+        (dispatch_df["grid_import_kwh"] / dispatch_df["timestep_hours"]).max()
+    )
 
     dynamic_grid_import_cost_eur = float(
         (dispatch_df["grid_import_kwh"] * dynamic_prices).sum()
@@ -182,6 +189,7 @@ def calculate_dispatch_metrics(
             else 0.0
         ),
         "peak_grid_import_kwh": float(dispatch_df["grid_import_kwh"].max()),
+        "peak_grid_import_kw": peak_grid_import_kw,
         "self_consumption_ratio": self_consumption_ratio,
         "self_consumption_improvement": (
             self_consumption_ratio - baseline["baseline_self_consumption_ratio"]

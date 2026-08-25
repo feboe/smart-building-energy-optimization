@@ -5,6 +5,7 @@ import pandas as pd
 from src.battery.data import prepare_simulation_data
 from src.battery.dispatch import (
     DISPATCH_COLUMNS,
+    horizon_steps,
     max_charge_input_kwh,
     max_discharge_to_load_kwh,
     validate_dispatch_results,
@@ -90,11 +91,13 @@ def _run_dispatch_loop(
     records = []
     soc_kwh = initial_soc_kwh
     prices = prepared_df["dynamic_import_price_eur_per_kwh"]
+    timestep_hours = float(prepared_df["timestep_hours"].iloc[0])
+    planning_steps = horizon_steps(scenario.horizon_hours, timestep_hours)
 
     for index, row in prepared_df.iterrows():
         current_price = float(row["dynamic_import_price_eur_per_kwh"])
         if use_price_thresholds:
-            horizon_prices = prices.iloc[index : index + scenario.horizon_hours]
+            horizon_prices = prices.iloc[index : index + planning_steps]
             low_price_threshold = float(
                 horizon_prices.quantile(scenario.low_price_quantile)
             )
@@ -112,7 +115,7 @@ def _run_dispatch_loop(
         soc_start_kwh = soc_kwh
         available_surplus_kwh = float(row["available_surplus_kwh"])
         demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
-        charge_power_remaining_kwh = battery.max_charge_power_kw
+        charge_power_remaining_kwh = battery.max_charge_power_kw * timestep_hours
         (
             future_surplus_kwh,
             reserved_surplus_headroom_kwh,
@@ -123,10 +126,11 @@ def _run_dispatch_loop(
             battery=battery,
             scenario=scenario,
             reserve_future_surplus=reserve_future_surplus,
+            planning_steps=planning_steps,
         )
 
         charge_limit_kwh = min(
-            max_charge_input_kwh(soc_kwh, battery),
+            max_charge_input_kwh(soc_kwh, battery, timestep_hours),
             charge_power_remaining_kwh,
         )
         charge_from_surplus_kwh = min(available_surplus_kwh, charge_limit_kwh)
@@ -141,7 +145,7 @@ def _run_dispatch_loop(
         if should_discharge:
             discharge_to_load_kwh = min(
                 demand_after_generation_kwh,
-                max_discharge_to_load_kwh(soc_kwh, battery),
+                max_discharge_to_load_kwh(soc_kwh, battery, timestep_hours),
             )
             soc_kwh -= discharge_to_load_kwh / battery.eta_discharge
 
@@ -162,12 +166,13 @@ def _run_dispatch_loop(
                 / battery.eta_charge
             )
             charge_from_grid_kwh = min(
-                max_charge_input_kwh(soc_kwh, battery),
+                max_charge_input_kwh(soc_kwh, battery, timestep_hours),
                 charge_power_remaining_kwh,
                 reserve_limited_charge_kwh,
                 _grid_connection_charge_limit_kwh(
                     remaining_deficit_kwh,
                     scenario,
+                    timestep_hours,
                 ),
             )
             soc_kwh += charge_from_grid_kwh * battery.eta_charge
@@ -180,6 +185,7 @@ def _run_dispatch_loop(
             {
                 "observation_timestamp": row["observation_timestamp"],
                 "local_timestamp": row["local_timestamp"],
+                "timestep_hours": timestep_hours,
                 "gross_load_kwh": row["gross_load_kwh"],
                 "local_generation_kwh": row["local_generation_kwh"],
                 "available_surplus_kwh": available_surplus_kwh,
@@ -218,12 +224,13 @@ def _future_surplus_reserve(
     battery: BatteryParameters,
     scenario: ScenarioParameters,
     reserve_future_surplus: bool,
+    planning_steps: int,
 ) -> tuple[float, float, float]:
     if not reserve_future_surplus:
         return float("nan"), float("nan"), battery.max_soc_kwh
 
     horizon_surplus = prepared_df["available_surplus_kwh"].iloc[
-        index + 1 : index + scenario.horizon_hours
+        index + 1 : index + planning_steps
     ]
     future_surplus_kwh = float(horizon_surplus.sum())
     usable_capacity_kwh = battery.max_soc_kwh - battery.min_soc_kwh

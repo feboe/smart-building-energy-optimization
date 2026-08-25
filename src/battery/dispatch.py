@@ -9,6 +9,7 @@ from src.battery.parameters import BatteryParameters
 DISPATCH_COLUMNS = [
     "observation_timestamp",
     "local_timestamp",
+    "timestep_hours",
     "gross_load_kwh",
     "local_generation_kwh",
     "available_surplus_kwh",
@@ -30,6 +31,22 @@ DISPATCH_COLUMNS = [
     "soc_start_kwh",
     "soc_end_kwh",
 ]
+
+
+def horizon_steps(horizon_hours: float, timestep_hours: float) -> int:
+    """Convert a real-time planning horizon to an exact number of intervals."""
+    if not math.isfinite(horizon_hours) or horizon_hours <= 0:
+        raise ValueError("horizon_hours must be finite and greater than zero.")
+    if not math.isfinite(timestep_hours) or timestep_hours <= 0:
+        raise ValueError("timestep_hours must be finite and greater than zero.")
+
+    exact_steps = horizon_hours / timestep_hours
+    rounded_steps = round(exact_steps)
+    if not math.isclose(exact_steps, rounded_steps, rel_tol=0, abs_tol=1e-9):
+        raise ValueError(
+            "horizon_hours must be an integer multiple of timestep_hours."
+        )
+    return int(rounded_steps)
 
 
 def max_charge_input_kwh(
@@ -82,6 +99,7 @@ def validate_dispatch_results(
         "grid_export_kwh",
     ]
     finite_columns = [
+        "timestep_hours",
         "gross_load_kwh",
         "local_generation_kwh",
         "available_surplus_kwh",
@@ -101,6 +119,9 @@ def validate_dispatch_results(
     for column in nonnegative_columns:
         if (dispatch_df[column] < -tolerance).any():
             raise ValueError(f"{column} contains negative values.")
+
+    if (dispatch_df["timestep_hours"] <= 0).any():
+        raise ValueError("timestep_hours must be greater than zero.")
 
     if (dispatch_df["soc_start_kwh"] < battery.min_soc_kwh - tolerance).any():
         raise ValueError("SOC start falls below the configured minimum.")
@@ -123,12 +144,14 @@ def validate_dispatch_results(
         raise ValueError("Battery charge does not match charge components.")
 
     if (
-        dispatch_df["battery_charge_kwh"] > battery.max_charge_power_kw + tolerance
+        dispatch_df["battery_charge_kwh"]
+        > battery.max_charge_power_kw * dispatch_df["timestep_hours"] + tolerance
     ).any():
         raise ValueError("Battery charge exceeds the configured power limit.")
 
     if (
-        dispatch_df["discharge_to_load_kwh"] > battery.max_discharge_power_kw + tolerance
+        dispatch_df["discharge_to_load_kwh"]
+        > battery.max_discharge_power_kw * dispatch_df["timestep_hours"] + tolerance
     ).any():
         raise ValueError("Battery discharge exceeds the configured power limit.")
 
