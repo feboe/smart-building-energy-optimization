@@ -81,15 +81,20 @@ The battery is modeled with a small set of physical assumptions:
 - energy capacity in kWh
 - minimum and maximum state of charge (SOC)
 - charge and discharge efficiency
-- C-rate based charge and discharge power limits
+- independent charge and discharge power limits in kW
 - optional degradation proxy based on discharged throughput
 
-The maximum charge and discharge power are derived from capacity and C-rate:
+Capacity and directional power are separate model inputs. This permits, for
+example, a 1,000 kWh battery to be represented with a 250 kW or 500 kW power
+conversion system.
 
-```text
-max_charge_power_kw = capacity_kwh * c_rate
-max_discharge_power_kw = capacity_kwh * c_rate
-```
+For a real product, the charge and discharge limits should be taken from the
+battery and power-conversion-system data sheets. Without product data, they
+are documented scenario assumptions. The current standard experiment remains
+configured with 500 kW charge and discharge power for the 1,000 kWh battery.
+This corresponds to a derived charge and discharge C-rate of 0.5 C. The
+capacity experiment retains 0.5 C only as an experiment assumption used to
+calculate those explicit power limits.
 
 The SOC balance is:
 

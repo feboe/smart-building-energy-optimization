@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass
+from numbers import Real
 
 FIXED_SURPLUS_ONLY = "fixed_surplus_only"
 DYNAMIC_SURPLUS_ONLY = "dynamic_surplus_only"
@@ -19,7 +20,8 @@ class BatteryParameters:
     """Physical battery assumptions for time-step-independent simulations."""
 
     capacity_kwh: float
-    c_rate: float
+    max_charge_power_kw: float
+    max_discharge_power_kw: float
     min_soc_fraction: float = 0.10
     max_soc_fraction: float = 1.00
     eta_charge: float = 0.95
@@ -27,10 +29,25 @@ class BatteryParameters:
     degradation_cost_eur_per_kwh: float = 0.0
 
     def __post_init__(self) -> None:
-        if self.capacity_kwh <= 0:
-            raise ValueError("capacity_kwh must be greater than zero.")
-        if self.c_rate <= 0:
-            raise ValueError("c_rate must be greater than zero.")
+        if (
+            isinstance(self.capacity_kwh, bool)
+            or not isinstance(self.capacity_kwh, Real)
+            or not math.isfinite(self.capacity_kwh)
+            or self.capacity_kwh <= 0
+        ):
+            raise ValueError("capacity_kwh must be finite and greater than zero.")
+        for value, name in (
+            (self.max_charge_power_kw, "max_charge_power_kw"),
+            (self.max_discharge_power_kw, "max_discharge_power_kw"),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Real)
+                or not math.isfinite(value)
+                or value <= 0
+            ):
+                raise ValueError(f"{name} must be finite and greater than zero.")
+
         if not 0 <= self.min_soc_fraction <= self.max_soc_fraction <= 1:
             raise ValueError("SOC fractions must satisfy 0 <= min <= max <= 1.")
         if not 0 < self.eta_charge <= 1:
@@ -43,16 +60,6 @@ class BatteryParameters:
             )
 
     @property
-    def max_charge_power_kw(self) -> float:
-        """Maximum charging power in kW."""
-        return self.capacity_kwh * self.c_rate
-
-    @property
-    def max_discharge_power_kw(self) -> float:
-        """Maximum discharging power in kW."""
-        return self.capacity_kwh * self.c_rate
-
-    @property
     def min_soc_kwh(self) -> float:
         """Minimum usable state of charge in kWh."""
         return self.capacity_kwh * self.min_soc_fraction
@@ -61,6 +68,16 @@ class BatteryParameters:
     def max_soc_kwh(self) -> float:
         """Maximum state of charge in kWh."""
         return self.capacity_kwh * self.max_soc_fraction
+
+    @property
+    def charge_c_rate(self) -> float:
+        """Configured maximum charging power relative to energy capacity."""
+        return self.max_charge_power_kw / self.capacity_kwh
+
+    @property
+    def discharge_c_rate(self) -> float:
+        """Configured maximum discharge power relative to energy capacity."""
+        return self.max_discharge_power_kw / self.capacity_kwh
 
 
 @dataclass(frozen=True)

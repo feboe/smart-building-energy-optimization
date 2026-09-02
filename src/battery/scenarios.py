@@ -10,8 +10,9 @@ from src.battery.parameters import (
 
 
 def make_battery_parameters(
-    capacity_kwh: float = 1000,
-    c_rate: float = 0.5,
+    capacity_kwh: float,
+    max_charge_power_kw: float,
+    max_discharge_power_kw: float,
     min_soc_fraction: float = 0.10,
     max_soc_fraction: float = 1.00,
     eta_charge: float = 0.95,
@@ -21,7 +22,8 @@ def make_battery_parameters(
     """Build battery parameters with project defaults."""
     return BatteryParameters(
         capacity_kwh=capacity_kwh,
-        c_rate=c_rate,
+        max_charge_power_kw=max_charge_power_kw,
+        max_discharge_power_kw=max_discharge_power_kw,
         min_soc_fraction=min_soc_fraction,
         max_soc_fraction=max_soc_fraction,
         eta_charge=eta_charge,
