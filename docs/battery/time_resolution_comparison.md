@@ -47,6 +47,12 @@ partly netted in the hourly representation.
 | Dynamic surplus-only | 6.5k EUR | 7.4k EUR | +13.6% |
 | Dynamic surplus plus grid charging | 13.4k EUR | 14.2k EUR | +5.7% |
 
+For each resolution, savings are measured against the corresponding baseline
+without a battery. The final percentage then shows how this calculated saving
+changes between the hourly and 15-minute models. Therefore, `+13.6%` and
+`+5.7%` mean that the 15-minute model estimates a higher operational BESS
+value; they do not represent a direct LP-versus-heuristic comparison.
+
 The comparison does not claim that these values reproduce the site's actual
 electricity contract. It shows how the *same* documented economic scenario is
 evaluated differently when the physical data retains quarter-hour behavior.
