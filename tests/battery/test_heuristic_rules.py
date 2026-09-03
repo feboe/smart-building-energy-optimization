@@ -14,7 +14,8 @@ from src.battery.scenarios import (
 def _make_exact_battery():
     return make_battery_parameters(
         capacity_kwh=100,
-        c_rate=1.0,
+        max_charge_power_kw=100,
+        max_discharge_power_kw=100,
         min_soc_fraction=0.0,
         eta_charge=1.0,
         eta_discharge=1.0,

@@ -16,7 +16,8 @@ from src.battery.scenarios import (
 def _make_exact_battery():
     return make_battery_parameters(
         capacity_kwh=100,
-        c_rate=1.0,
+        max_charge_power_kw=100,
+        max_discharge_power_kw=100,
         min_soc_fraction=0.0,
         eta_charge=1.0,
         eta_discharge=1.0,
@@ -114,7 +115,8 @@ def test_dispatch_applies_charge_and_discharge_efficiency(
 ) -> None:
     battery = make_battery_parameters(
         capacity_kwh=200,
-        c_rate=1.0,
+        max_charge_power_kw=200,
+        max_discharge_power_kw=200,
         min_soc_fraction=0.0,
         eta_charge=0.95,
         eta_discharge=0.95,
@@ -144,7 +146,8 @@ def test_dispatch_respects_minimum_soc_reserve(
 ) -> None:
     battery = make_battery_parameters(
         capacity_kwh=100,
-        c_rate=1.0,
+        max_charge_power_kw=100,
+        max_discharge_power_kw=100,
         min_soc_fraction=0.10,
         eta_charge=1.0,
         eta_discharge=1.0,
@@ -163,12 +166,13 @@ def test_dispatch_respects_minimum_soc_reserve(
     assert dispatch_df.loc[0, "soc_end_kwh"] == pytest.approx(10.0)
 
 
-def test_dispatch_respects_c_rate_power_limit(
+def test_dispatch_respects_configured_power_limit(
     make_analysis_df,
 ) -> None:
     battery = make_battery_parameters(
         capacity_kwh=100,
-        c_rate=0.5,
+        max_charge_power_kw=50,
+        max_discharge_power_kw=50,
         min_soc_fraction=0.0,
         eta_charge=1.0,
         eta_discharge=1.0,

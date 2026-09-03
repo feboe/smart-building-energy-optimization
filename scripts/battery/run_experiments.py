@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 from time import perf_counter
+from uuid import uuid4
 
 import pandas as pd
 
@@ -17,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.battery.data import load_smart_company_analysis
+from src.battery.audit import build_lp_audit_dataframe
 from src.battery.heuristic import run_heuristic_dispatch
 from src.battery.metrics import calculate_baseline_metrics, calculate_dispatch_metrics
 from src.battery.optimization import run_optimized_dispatch
@@ -65,6 +67,7 @@ METADATA_COLUMNS = [
     "horizon_hours",
     "terminal_value_window_hours",
     "terminal_value_applied",
+    "dispatch_file",
     "low_price_quantile",
     "high_price_quantile",
     "eta_charge",
@@ -104,6 +107,9 @@ def run_capacity_sensitivity(
     capacities_kwh: list[float] | None = None,
     run_timestamp: str | None = None,
     max_workers: int | None = None,
+    terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
+    dispatch_dir: Path | None = None,
+    prepare_dispatch_dir: bool = True,
 ) -> pd.DataFrame:
     """Run baseline, heuristic, and LP experiments for the configured capacities."""
     capacities = CAPACITIES_KWH if capacities_kwh is None else capacities_kwh
@@ -113,19 +119,24 @@ def run_capacity_sensitivity(
         export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
         import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
         horizon_hours=HORIZON_HOURS,
-        terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
+        terminal_value_window_hours=terminal_value_window_hours,
     )
 
+    if prepare_dispatch_dir:
+        _prepare_dispatch_export_dir(dispatch_dir)
     rows = _baseline_rows(
         analysis_df=analysis_df,
         scenario=fixed_scenario,
         run_timestamp=timestamp,
     )
-
-    jobs = _dispatch_jobs(capacities)
+    jobs = _dispatch_jobs(capacities, terminal_value_window_hours)
     worker_count = _resolve_max_workers(max_workers, len(jobs))
     if jobs and worker_count == 1:
-        rows.extend(_run_dispatch_jobs_serial(analysis_df, jobs, timestamp))
+        rows.extend(
+            _run_dispatch_jobs_serial(
+                analysis_df, jobs, timestamp, dispatch_dir=dispatch_dir
+            )
+        )
     elif jobs:
         rows.extend(
             _run_dispatch_jobs_parallel(
@@ -133,6 +144,7 @@ def run_capacity_sensitivity(
                 jobs=jobs,
                 run_timestamp=timestamp,
                 max_workers=worker_count,
+                dispatch_dir=dispatch_dir,
             )
         )
 
@@ -147,11 +159,14 @@ def run_capacity_sensitivity(
     return results_df[ordered_columns]
 
 
-def _dispatch_jobs(capacities_kwh: list[float]) -> list[_DispatchJob]:
+def _dispatch_jobs(
+    capacities_kwh: list[float],
+    terminal_value_window_hours: float | None,
+) -> list[_DispatchJob]:
     return [
         _DispatchJob(capacity_kwh=capacity_kwh, scenario=scenario)
         for capacity_kwh in capacities_kwh
-        for scenario in _make_scenarios()
+        for scenario in _make_scenarios(terminal_value_window_hours)
     ]
 
 
@@ -171,6 +186,7 @@ def _run_dispatch_jobs_serial(
     analysis_df: pd.DataFrame,
     jobs: list[_DispatchJob],
     run_timestamp: str,
+    dispatch_dir: Path | None,
 ) -> list[dict]:
     rows = []
     for job in jobs:
@@ -179,6 +195,7 @@ def _run_dispatch_jobs_serial(
             analysis_df=analysis_df,
             job=job,
             run_timestamp=run_timestamp,
+            dispatch_dir=dispatch_dir,
         )
         rows.extend(job_rows)
         _print_job_completion(job, job_rows)
@@ -190,6 +207,7 @@ def _run_dispatch_jobs_parallel(
     jobs: list[_DispatchJob],
     run_timestamp: str,
     max_workers: int,
+    dispatch_dir: Path | None,
 ) -> list[dict]:
     print(f"Running {len(jobs)} capacity-scenario jobs with {max_workers} workers...")
     rows = []
@@ -200,6 +218,7 @@ def _run_dispatch_jobs_parallel(
                 analysis_df=analysis_df,
                 job=job,
                 run_timestamp=run_timestamp,
+                dispatch_dir=dispatch_dir,
             ): job
             for job in jobs
         }
@@ -215,6 +234,7 @@ def _run_dispatch_job(
     analysis_df: pd.DataFrame,
     job: _DispatchJob,
     run_timestamp: str,
+    dispatch_dir: Path | None,
 ) -> list[dict]:
     battery = _make_battery(job.capacity_kwh)
     scenario = job.scenario
@@ -247,6 +267,7 @@ def _run_dispatch_job(
         analysis_df=analysis_df,
         battery=battery,
         scenario=scenario,
+        include_horizon_diagnostics=dispatch_dir is not None,
     )
     optimized_metrics = calculate_dispatch_metrics(
         analysis_df=analysis_df,
@@ -254,15 +275,30 @@ def _run_dispatch_job(
         battery=battery,
         scenario=scenario,
     )
-    rows.append(
-        _with_metadata(
-            row=optimized_metrics,
-            method="lp_optimization",
+    optimized_row = _with_metadata(
+        row=optimized_metrics,
+        method="lp_optimization",
+        scenario=scenario,
+        run_timestamp=run_timestamp,
+        elapsed_seconds=perf_counter() - start_time,
+    )
+    if dispatch_dir is not None:
+        audit_df = build_lp_audit_dataframe(
+            analysis_df=analysis_df,
+            dispatch_df=optimized_dispatch_df,
+            battery=battery,
             scenario=scenario,
             run_timestamp=run_timestamp,
-            elapsed_seconds=perf_counter() - start_time,
         )
-    )
+        export_path = _dispatch_export_path(
+            dispatch_dir=dispatch_dir,
+            resolution=str(analysis_df["resolution"].iloc[0]),
+            battery=battery,
+            scenario=scenario,
+        )
+        _write_parquet_atomically(audit_df, export_path)
+        optimized_row["dispatch_file"] = _project_relative_path(export_path)
+    rows.append(optimized_row)
     return rows
 
 
@@ -288,25 +324,27 @@ def _make_battery(capacity_kwh: float) -> BatteryParameters:
     )
 
 
-def _make_scenarios() -> list[ScenarioParameters]:
+def _make_scenarios(
+    terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
+) -> list[ScenarioParameters]:
     return [
         make_fixed_surplus_only_scenario(
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
-            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
+            terminal_value_window_hours=terminal_value_window_hours,
         ),
         make_dynamic_surplus_only_scenario(
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
-            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
+            terminal_value_window_hours=terminal_value_window_hours,
         ),
         make_dynamic_surplus_and_grid_charging_scenario(
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
-            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
+            terminal_value_window_hours=terminal_value_window_hours,
             surplus_reserve_fraction=SURPLUS_RESERVE_FRACTION,
             grid_connection_limit_kw=GRID_CONNECTION_LIMIT_KW,
         ),
@@ -431,6 +469,7 @@ def _with_metadata(
                 method == "lp_optimization"
                 and scenario.terminal_value_window_hours is not None
             ),
+            "dispatch_file": None,
             "low_price_quantile": scenario.low_price_quantile,
             "high_price_quantile": scenario.high_price_quantile,
             "eta_charge": ETA_CHARGE,
@@ -440,6 +479,68 @@ def _with_metadata(
         }
     )
     return enriched_row
+
+
+def _prepare_dispatch_export_dir(dispatch_dir: Path | None) -> None:
+    """Create an empty export directory, refusing to mix runs."""
+    if dispatch_dir is None:
+        return
+    if dispatch_dir.exists():
+        if not dispatch_dir.is_dir():
+            raise ValueError(f"dispatch_dir is not a directory: {dispatch_dir}")
+        if any(dispatch_dir.iterdir()):
+            raise ValueError(
+                "dispatch_dir must be new or empty to prevent overwriting "
+                f"existing exports: {dispatch_dir}"
+            )
+    else:
+        dispatch_dir.mkdir(parents=True)
+
+
+def _dispatch_export_path(
+    dispatch_dir: Path,
+    resolution: str,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+) -> Path:
+    filename = (
+        f"lp_optimization__{resolution}__{battery.capacity_kwh:g}kwh"
+        f"__{scenario.name}.parquet"
+    )
+    path = dispatch_dir / filename
+    if path.exists():
+        raise FileExistsError(f"Refusing to overwrite dispatch export: {path}")
+    return path
+
+
+def _write_parquet_atomically(dispatch_df: pd.DataFrame, output_path: Path) -> None:
+    """Write an audit dataset without exposing a partially written final file."""
+    temporary_path = output_path.with_name(
+        f".{output_path.stem}.{os.getpid()}.{uuid4().hex}.tmp.parquet"
+    )
+    try:
+        dispatch_df.to_parquet(temporary_path, engine="pyarrow", index=False)
+        # A hard-link publish is atomic and, unlike os.replace, cannot replace
+        # a file created by another worker between the existence check and write.
+        os.link(temporary_path, output_path)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"Refusing to overwrite dispatch export: {output_path}"
+        ) from exc
+    except ImportError as exc:
+        raise RuntimeError(
+            "Parquet export requires pyarrow; install requirements.txt first."
+        ) from exc
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def _project_relative_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
 
 
 if __name__ == "__main__":

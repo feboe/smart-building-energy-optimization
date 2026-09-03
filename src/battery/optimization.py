@@ -25,6 +25,25 @@ OPTIMAL_STATUS = "Optimal"
 NUMERIC_TOLERANCE = 1e-9
 SOC_BOUND_TOLERANCE = 1e-4
 
+HORIZON_DIAGNOSTIC_COLUMNS = [
+    "planning_horizon_steps",
+    "planning_horizon_duration_hours",
+    "planning_horizon_end_timestamp",
+    "solver_status",
+    "terminal_reference_price_eur_per_kwh",
+    "terminal_value_eur_per_kwh_soc",
+    "planned_terminal_soc_kwh",
+    "planned_terminal_usable_soc_kwh",
+    "planned_terminal_value_eur",
+    "horizon_operating_cost_eur",
+    "horizon_terminal_credit_eur",
+    "horizon_objective_eur",
+]
+HorizonSolutionValue = float | int | str | pd.Timestamp | None
+HorizonSolution = dict[str, HorizonSolutionValue]
+DispatchRecordValue = float | int | bool | str | pd.Timestamp | None
+DispatchRecord = dict[str, DispatchRecordValue]
+
 
 def run_optimized_dispatch(
     analysis_df: pd.DataFrame,
@@ -33,6 +52,7 @@ def run_optimized_dispatch(
     initial_soc_kwh: float | None = None,
     solver: pulp.LpSolver | None = None,
     solver_msg: bool = False,
+    include_horizon_diagnostics: bool = False,
 ) -> pd.DataFrame:
     """Run rolling-horizon LP dispatch for one BESS scenario."""
     prepared_df = prepare_simulation_data(analysis_df, scenario)
@@ -64,11 +84,15 @@ def run_optimized_dispatch(
             soc_start_kwh=soc_kwh,
             battery=battery,
             scenario=scenario,
+            include_horizon_diagnostics=include_horizon_diagnostics,
         )
         records.append(record)
-        soc_kwh = record["soc_end_kwh"]
+        soc_kwh = float(record["soc_end_kwh"])
 
-    dispatch_df = pd.DataFrame(records, columns=DISPATCH_COLUMNS)
+    output_columns = DISPATCH_COLUMNS + (
+        HORIZON_DIAGNOSTIC_COLUMNS if include_horizon_diagnostics else []
+    )
+    dispatch_df = pd.DataFrame(records, columns=output_columns)
     validate_dispatch_results(
         dispatch_df=dispatch_df,
         battery=battery,
@@ -98,7 +122,7 @@ def _solve_horizon(
     fixed_import_price_eur_per_kwh: float,
     solver: pulp.LpSolver | None,
     solver_msg: bool,
-) -> dict[str, float]:
+) -> HorizonSolution:
     time_steps = range(len(horizon_df))
     model = pulp.LpProblem("bess_rolling_horizon", pulp.LpMinimize)
 
@@ -178,44 +202,70 @@ def _solve_horizon(
             - discharge_to_load[step] / battery.eta_discharge
         ), f"soc_balance_{step}"
 
-    model += (
-        pulp.lpSum(
-            _import_price(row, scenario, fixed_import_price_eur_per_kwh)
-            * grid_import[step]
-            - scenario.export_price_eur_per_kwh * grid_export[step]
-            + battery.degradation_cost_eur_per_kwh * discharge_to_load[step]
-            for step, (_, row) in zip(time_steps, horizon_df.iterrows())
-        )
-        - _terminal_value_eur_per_kwh_soc(
-            horizon_df=horizon_df,
-            battery=battery,
-            scenario=scenario,
-            fixed_import_price_eur_per_kwh=fixed_import_price_eur_per_kwh,
-        )
-        * (soc[len(horizon_df) - 1] - battery.min_soc_kwh),
-        "net_electricity_cost",
+    terminal_reference_price_eur_per_kwh = _terminal_reference_price_eur_per_kwh(
+        horizon_df=horizon_df,
+        scenario=scenario,
+        fixed_import_price_eur_per_kwh=fixed_import_price_eur_per_kwh,
     )
+    terminal_value_eur_per_kwh_soc = _terminal_value_from_reference_price(
+        terminal_reference_price_eur_per_kwh=terminal_reference_price_eur_per_kwh,
+        battery=battery,
+    )
+    operating_cost = pulp.lpSum(
+        _import_price(row, scenario, fixed_import_price_eur_per_kwh)
+        * grid_import[step]
+        - scenario.export_price_eur_per_kwh * grid_export[step]
+        + battery.degradation_cost_eur_per_kwh * discharge_to_load[step]
+        for step, (_, row) in zip(time_steps, horizon_df.iterrows())
+    )
+    terminal_credit = terminal_value_eur_per_kwh_soc * (
+        soc[len(horizon_df) - 1] - battery.min_soc_kwh
+    )
+    model += (operating_cost - terminal_credit, "net_electricity_cost")
 
     status_code = model.solve(solver or pulp.PULP_CBC_CMD(msg=solver_msg))
     status = pulp.LpStatus[status_code]
     if status != OPTIMAL_STATUS:
         raise RuntimeError(f"LP optimization failed with solver status: {status}")
 
+    planned_terminal_soc_kwh = _variable_value(soc[len(horizon_df) - 1])
+    planned_terminal_usable_soc_kwh = max(
+        planned_terminal_soc_kwh - battery.min_soc_kwh,
+        0.0,
+    )
+    horizon_operating_cost_eur = _clean_value(pulp.value(operating_cost))
+    horizon_terminal_credit_eur = _clean_value(pulp.value(terminal_credit))
     return {
         "charge_from_surplus_kwh": _variable_value(charge_from_surplus[0]),
         "charge_from_grid_kwh": _variable_value(charge_from_grid[0]),
         "discharge_to_load_kwh": _variable_value(discharge_to_load[0]),
+        "planning_horizon_steps": len(horizon_df),
+        "planning_horizon_duration_hours": float(horizon_df["timestep_hours"].sum()),
+        "planning_horizon_end_timestamp": (
+            pd.Timestamp(horizon_df["observation_timestamp"].iloc[-1])
+            + pd.to_timedelta(float(horizon_df["timestep_hours"].iloc[-1]), unit="h")
+        ),
+        "solver_status": status,
+        "terminal_reference_price_eur_per_kwh": terminal_reference_price_eur_per_kwh,
+        "terminal_value_eur_per_kwh_soc": terminal_value_eur_per_kwh_soc,
+        "planned_terminal_soc_kwh": planned_terminal_soc_kwh,
+        "planned_terminal_usable_soc_kwh": planned_terminal_usable_soc_kwh,
+        "planned_terminal_value_eur": horizon_terminal_credit_eur,
+        "horizon_operating_cost_eur": horizon_operating_cost_eur,
+        "horizon_terminal_credit_eur": horizon_terminal_credit_eur,
+        "horizon_objective_eur": _clean_value(pulp.value(model.objective)),
     }
 
 
 def _build_dispatch_record(
     row: pd.Series,
     horizon_df: pd.DataFrame,
-    solution: dict[str, float],
+    solution: HorizonSolution,
     soc_start_kwh: float,
     battery: BatteryParameters,
     scenario: ScenarioParameters,
-) -> dict[str, float | bool | pd.Timestamp]:
+    include_horizon_diagnostics: bool,
+) -> DispatchRecord:
     available_surplus_kwh = float(row["available_surplus_kwh"])
     demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
     current_price = float(row["dynamic_import_price_eur_per_kwh"])
@@ -223,17 +273,17 @@ def _build_dispatch_record(
 
     max_charge_kwh = max_charge_input_kwh(soc_start_kwh, battery, timestep_hours)
     charge_from_surplus_kwh = _clean_bound_value(
-        solution["charge_from_surplus_kwh"],
+        float(solution["charge_from_surplus_kwh"]),
         lower_bound=0.0,
         upper_bound=min(available_surplus_kwh, max_charge_kwh),
     )
     charge_from_grid_kwh = _clean_bound_value(
-        solution["charge_from_grid_kwh"],
+        float(solution["charge_from_grid_kwh"]),
         lower_bound=0.0,
         upper_bound=max(max_charge_kwh - charge_from_surplus_kwh, 0.0),
     )
     discharge_to_load_kwh = _clean_bound_value(
-        solution["discharge_to_load_kwh"],
+        float(solution["discharge_to_load_kwh"]),
         lower_bound=0.0,
         upper_bound=min(
             demand_after_generation_kwh,
@@ -260,7 +310,7 @@ def _build_dispatch_record(
         is_high_price,
     ) = _price_threshold_context(horizon_df, scenario, current_price)
 
-    return {
+    record: DispatchRecord = {
         "observation_timestamp": row["observation_timestamp"],
         "local_timestamp": row["local_timestamp"],
         "timestep_hours": timestep_hours,
@@ -285,6 +335,14 @@ def _build_dispatch_record(
         "soc_start_kwh": soc_start_kwh,
         "soc_end_kwh": soc_end_kwh,
     }
+    if include_horizon_diagnostics:
+        record.update(
+            {
+                column: solution[column]
+                for column in HORIZON_DIAGNOSTIC_COLUMNS
+            }
+        )
+    return record
 
 
 def _price_threshold_context(
@@ -317,21 +375,15 @@ def _import_price(
     return float(row["dynamic_import_price_eur_per_kwh"])
 
 
-def _terminal_value_eur_per_kwh_soc(
+def _terminal_reference_price_eur_per_kwh(
     horizon_df: pd.DataFrame,
-    battery: BatteryParameters,
     scenario: ScenarioParameters,
     fixed_import_price_eur_per_kwh: float,
-) -> float:
-    """Return terminal value per internal kWh of usable battery SOC.
-
-    The value estimates the avoided future import cost when the stored energy is
-    discharged after the horizon.  It is deliberately a control objective only;
-    reported simulation KPIs continue to contain realized energy flows only.
-    """
+) -> float | None:
+    """Return the all-in import-price reference used for terminal valuation."""
     window_hours = scenario.terminal_value_window_hours
     if window_hours is None:
-        return 0.0
+        return None
 
     if horizon_df.empty:
         raise ValueError("Cannot calculate a terminal value for an empty horizon.")
@@ -343,17 +395,51 @@ def _terminal_value_eur_per_kwh_soc(
         window_steps = horizon_steps(window_hours, timestep_hours)
         price_window = horizon_df.iloc[-min(window_steps, len(horizon_df)) :]
         durations = price_window["timestep_hours"]
-        import_price_eur_per_kwh = float(
+        return float(
             (
                 price_window["dynamic_import_price_eur_per_kwh"] * durations
             ).sum()
             / durations.sum()
         )
+    return import_price_eur_per_kwh
+
+
+def _terminal_value_eur_per_kwh_soc(
+    horizon_df: pd.DataFrame,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+    fixed_import_price_eur_per_kwh: float,
+) -> float:
+    """Return terminal value per internal kWh of usable battery SOC.
+
+    Kept as a small public-by-convention helper for model-level tests.  Horizon
+    diagnostics additionally expose its price reference separately.
+    """
+    return _terminal_value_from_reference_price(
+        terminal_reference_price_eur_per_kwh=_terminal_reference_price_eur_per_kwh(
+            horizon_df=horizon_df,
+            scenario=scenario,
+            fixed_import_price_eur_per_kwh=fixed_import_price_eur_per_kwh,
+        ),
+        battery=battery,
+    )
+
+
+def _terminal_value_from_reference_price(
+    terminal_reference_price_eur_per_kwh: float | None,
+    battery: BatteryParameters,
+) -> float:
+    """Return terminal value per internal kWh of usable battery SOC."""
+    if terminal_reference_price_eur_per_kwh is None:
+        return 0.0
 
     return max(
         0.0,
         battery.eta_discharge
-        * (import_price_eur_per_kwh - battery.degradation_cost_eur_per_kwh),
+        * (
+            terminal_reference_price_eur_per_kwh
+            - battery.degradation_cost_eur_per_kwh
+        ),
     )
 
 

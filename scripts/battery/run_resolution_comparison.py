@@ -34,6 +34,8 @@ def run_bess_resolution_comparison(
     capacities_kwh: list[float] | None = None,
     run_timestamp: str | None = None,
     max_workers: int | None = None,
+    terminal_value_window_hours: float | None = 4.0,
+    dispatch_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Run the standard baseline, heuristic, and LP scenarios per resolution."""
     timestamp = run_timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -45,7 +47,9 @@ def run_bess_resolution_comparison(
         raise ValueError("capacities_kwh must contain finite positive values.")
 
     result_frames = []
-    for resolution, analysis_df in analysis_by_resolution.items():
+    for resolution_index, (resolution, analysis_df) in enumerate(
+        analysis_by_resolution.items()
+    ):
         if resolution not in ANALYSIS_VIEW_NAMES:
             raise ValueError(f"Unsupported resolution: {resolution!r}.")
         if analysis_df.empty:
@@ -75,6 +79,9 @@ def run_bess_resolution_comparison(
             capacities_kwh=capacities,
             run_timestamp=timestamp,
             max_workers=max_workers,
+            terminal_value_window_hours=terminal_value_window_hours,
+            dispatch_dir=dispatch_dir,
+            prepare_dispatch_dir=resolution_index == 0,
         ).copy()
         result_df["experiment_name"] = "time_resolution_comparison"
         result_df.insert(1, "resolution", resolution)
@@ -146,6 +153,23 @@ def parse_args() -> argparse.Namespace:
         help="Length from start; ignored when --end is supplied (default: 7).",
     )
     parser.add_argument("--max-workers", type=int)
+    terminal_value_group = parser.add_mutually_exclusive_group()
+    terminal_value_group.add_argument(
+        "--terminal-value-window-hours",
+        type=float,
+        default=4.0,
+        help="Terminal-value price window in real hours (default: 4).",
+    )
+    terminal_value_group.add_argument(
+        "--no-terminal-value",
+        action="store_true",
+        help="Disable terminal SOC valuation for an A/B comparison.",
+    )
+    parser.add_argument(
+        "--dispatch-dir",
+        type=Path,
+        help="Empty directory for one LP audit Parquet file per scenario.",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULTS_PATH)
     return parser.parse_args()
 
@@ -161,10 +185,15 @@ def main() -> None:
         print(f"Selected {len(selected_df):,} {resolution} rows.")
         analysis_by_resolution[resolution] = selected_df
 
+    terminal_value_window_hours = (
+        None if args.no_terminal_value else args.terminal_value_window_hours
+    )
     results_df = run_bess_resolution_comparison(
         analysis_by_resolution=analysis_by_resolution,
         capacities_kwh=args.capacities_kwh,
         max_workers=args.max_workers,
+        terminal_value_window_hours=terminal_value_window_hours,
+        dispatch_dir=args.dispatch_dir,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(args.output, index=False)
