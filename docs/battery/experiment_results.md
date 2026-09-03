@@ -234,7 +234,9 @@ building demand and is not a complete point-of-connection model.
 - Forecast error and real-time command correction are excluded.
 - Stored battery energy cannot be exported to the grid.
 - The grid limit constrains extra battery charging, not all import/export flows.
-- The LP has no terminal value function and can retain horizon-end effects.
+- The current model uses an optional terminal SOC value derived from the final
+  four known hours of each rolling horizon; this remains an economic scenario
+  assumption rather than an observed post-horizon price.
 
 ## Main Conclusions
 

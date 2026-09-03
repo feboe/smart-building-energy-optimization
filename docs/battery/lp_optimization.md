@@ -73,6 +73,31 @@ The third term adds the simple degradation proxy for discharged battery energy.
 For the fixed-price scenario, $p_t$ is replaced by the fixed import price. For
 dynamic scenarios, $p_t$ is the hourly dynamic import price.
 
+## Terminal Energy Value
+
+The rolling horizon has no price information beyond its final interval. To
+avoid an artificial incentive to empty the battery exactly at that boundary,
+the LP can assign a value to usable terminal SOC. This is optional and disabled
+when `terminal_value_window_hours` is not configured.
+
+For each horizon, the dynamic-price scenarios use the time-weighted mean all-in
+import price (day-ahead price plus configured markup) over the final configured
+window. The standard experiment uses four real hours: four hourly intervals or
+16 quarter-hour intervals. A shorter final horizon uses all remaining rows.
+The fixed-price scenario instead uses its complete fixed import price.
+
+The value per internal kWh SOC is the expected usable discharge energy times
+its net avoided import cost:
+
+$$
+v^{terminal} = \max\left(0, \eta^{dis}(\bar{p}^{imp} - c^{deg})\right)
+$$
+
+Only SOC above the technical minimum is credited. The LP minimizes operating
+cost less $v^{terminal}(s_T-S^{min})$. This is a decision aid, not a realised
+cash flow: reported import cost, net cost, and savings do not include a
+terminal-value revenue.
+
 ## Energy Balance Constraints
 
 The model separates deficit and surplus hours using precomputed inputs:

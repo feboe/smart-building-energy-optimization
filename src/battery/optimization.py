@@ -185,7 +185,14 @@ def _solve_horizon(
             - scenario.export_price_eur_per_kwh * grid_export[step]
             + battery.degradation_cost_eur_per_kwh * discharge_to_load[step]
             for step, (_, row) in zip(time_steps, horizon_df.iterrows())
-        ),
+        )
+        - _terminal_value_eur_per_kwh_soc(
+            horizon_df=horizon_df,
+            battery=battery,
+            scenario=scenario,
+            fixed_import_price_eur_per_kwh=fixed_import_price_eur_per_kwh,
+        )
+        * (soc[len(horizon_df) - 1] - battery.min_soc_kwh),
         "net_electricity_cost",
     )
 
@@ -308,6 +315,46 @@ def _import_price(
         return fixed_import_price_eur_per_kwh
 
     return float(row["dynamic_import_price_eur_per_kwh"])
+
+
+def _terminal_value_eur_per_kwh_soc(
+    horizon_df: pd.DataFrame,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+    fixed_import_price_eur_per_kwh: float,
+) -> float:
+    """Return terminal value per internal kWh of usable battery SOC.
+
+    The value estimates the avoided future import cost when the stored energy is
+    discharged after the horizon.  It is deliberately a control objective only;
+    reported simulation KPIs continue to contain realized energy flows only.
+    """
+    window_hours = scenario.terminal_value_window_hours
+    if window_hours is None:
+        return 0.0
+
+    if horizon_df.empty:
+        raise ValueError("Cannot calculate a terminal value for an empty horizon.")
+
+    if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
+        import_price_eur_per_kwh = fixed_import_price_eur_per_kwh
+    else:
+        timestep_hours = float(horizon_df["timestep_hours"].iloc[0])
+        window_steps = horizon_steps(window_hours, timestep_hours)
+        price_window = horizon_df.iloc[-min(window_steps, len(horizon_df)) :]
+        durations = price_window["timestep_hours"]
+        import_price_eur_per_kwh = float(
+            (
+                price_window["dynamic_import_price_eur_per_kwh"] * durations
+            ).sum()
+            / durations.sum()
+        )
+
+    return max(
+        0.0,
+        battery.eta_discharge
+        * (import_price_eur_per_kwh - battery.degradation_cost_eur_per_kwh),
+    )
 
 
 def _grid_connection_charge_limit_kwh(

@@ -44,6 +44,7 @@ DEGRADATION_COST_EUR_PER_KWH = 0.03
 IMPORT_MARKUP_EUR_PER_KWH = 0.115
 EXPORT_PRICE_EUR_PER_KWH = 0.08
 HORIZON_HOURS = 24
+TERMINAL_VALUE_WINDOW_HOURS = 4.0
 GRID_CONNECTION_LIMIT_KW = 500.0
 SURPLUS_RESERVE_FRACTION = 1.0
 
@@ -62,6 +63,8 @@ METADATA_COLUMNS = [
     "import_markup_eur_per_kwh",
     "export_price_eur_per_kwh",
     "horizon_hours",
+    "terminal_value_window_hours",
+    "terminal_value_applied",
     "low_price_quantile",
     "high_price_quantile",
     "eta_charge",
@@ -110,6 +113,7 @@ def run_capacity_sensitivity(
         export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
         import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
         horizon_hours=HORIZON_HOURS,
+        terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
     )
 
     rows = _baseline_rows(
@@ -290,16 +294,19 @@ def _make_scenarios() -> list[ScenarioParameters]:
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
+            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
         ),
         make_dynamic_surplus_only_scenario(
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
+            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
         ),
         make_dynamic_surplus_and_grid_charging_scenario(
             export_price_eur_per_kwh=EXPORT_PRICE_EUR_PER_KWH,
             import_markup_eur_per_kwh=IMPORT_MARKUP_EUR_PER_KWH,
             horizon_hours=HORIZON_HOURS,
+            terminal_value_window_hours=TERMINAL_VALUE_WINDOW_HOURS,
             surplus_reserve_fraction=SURPLUS_RESERVE_FRACTION,
             grid_connection_limit_kw=GRID_CONNECTION_LIMIT_KW,
         ),
@@ -419,6 +426,11 @@ def _with_metadata(
             "import_markup_eur_per_kwh": scenario.import_markup_eur_per_kwh,
             "export_price_eur_per_kwh": scenario.export_price_eur_per_kwh,
             "horizon_hours": scenario.horizon_hours,
+            "terminal_value_window_hours": scenario.terminal_value_window_hours,
+            "terminal_value_applied": (
+                method == "lp_optimization"
+                and scenario.terminal_value_window_hours is not None
+            ),
             "low_price_quantile": scenario.low_price_quantile,
             "high_price_quantile": scenario.high_price_quantile,
             "eta_charge": ETA_CHARGE,

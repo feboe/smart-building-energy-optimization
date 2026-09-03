@@ -94,6 +94,7 @@ class ScenarioParameters:
     fixed_import_price_eur_per_kwh: float | None = None
     surplus_reserve_fraction: float = 1.0
     grid_connection_limit_kw: float | None = None
+    terminal_value_window_hours: float | None = None
 
     def __post_init__(self) -> None:
         if self.dispatch_strategy not in VALID_DISPATCH_STRATEGIES:
@@ -101,7 +102,7 @@ class ScenarioParameters:
                 "dispatch_strategy must be one of "
                 f"{sorted(VALID_DISPATCH_STRATEGIES)}."
             )
-        if self.horizon_hours <= 0:
+        if not math.isfinite(self.horizon_hours) or self.horizon_hours <= 0:
             raise ValueError("horizon_hours must be greater than zero.")
         if not 0 <= self.low_price_quantile <= 1:
             raise ValueError("low_price_quantile must be between 0 and 1.")
@@ -119,3 +120,18 @@ class ScenarioParameters:
             or self.grid_connection_limit_kw <= 0
         ):
             raise ValueError("grid_connection_limit_kw must be positive when configured.")
+        if self.terminal_value_window_hours is not None:
+            if (
+                isinstance(self.terminal_value_window_hours, bool)
+                or not isinstance(self.terminal_value_window_hours, Real)
+                or not math.isfinite(self.terminal_value_window_hours)
+                or self.terminal_value_window_hours <= 0
+            ):
+                raise ValueError(
+                    "terminal_value_window_hours must be finite and greater than zero "
+                    "when configured."
+                )
+            if self.terminal_value_window_hours > self.horizon_hours:
+                raise ValueError(
+                    "terminal_value_window_hours must not exceed horizon_hours."
+                )
