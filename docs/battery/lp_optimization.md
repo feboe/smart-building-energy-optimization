@@ -98,6 +98,11 @@ cost less $v^{terminal}(s_T-S^{min})$. This is a decision aid, not a realised
 cash flow: reported import cost, net cost, and savings do not include a
 terminal-value revenue.
 
+The compact experiment summary reports `initial_soc_kwh`, `final_soc_kwh`,
+`final_usable_soc_kwh`, and `soc_change_kwh`. These inventory KPIs make cost
+comparisons transparent when runs finish with different amounts of stored
+energy. They do not alter the objective or reported operating costs.
+
 ## Audit Dispatch Export
 
 The general `run_bess_simulation.py` runner can additionally save an LP audit

@@ -70,6 +70,18 @@ def test_resolution_comparison_contains_all_standard_methods(
     assert baseline_rows["max_discharge_power_kw"].isna().all()
     assert baseline_rows["charge_c_rate"].isna().all()
     assert baseline_rows["discharge_c_rate"].isna().all()
+    assert baseline_rows["initial_soc_kwh"].isna().all()
+    assert baseline_rows["final_soc_kwh"].isna().all()
+    assert baseline_rows["final_usable_soc_kwh"].isna().all()
+    assert baseline_rows["soc_change_kwh"].isna().all()
+    assert bess_rows[
+        [
+            "initial_soc_kwh",
+            "final_soc_kwh",
+            "final_usable_soc_kwh",
+            "soc_change_kwh",
+        ]
+    ].notna().all().all()
     hourly_result = result_df[result_df["resolution"] == "hour"]
     quarter_hour_result = result_df[result_df["resolution"] == "15min"]
     assert set(hourly_result["analysis_start_utc"]) == {"2021-01-01T00:00:00+00:00"}

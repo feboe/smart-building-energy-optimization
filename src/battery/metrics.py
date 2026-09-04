@@ -134,6 +134,9 @@ def calculate_dispatch_metrics(
         [dispatch_df["soc_start_kwh"], dispatch_df["soc_end_kwh"]],
         ignore_index=True,
     )
+    initial_soc_kwh = float(dispatch_df["soc_start_kwh"].iloc[0])
+    final_soc_kwh = float(dispatch_df["soc_end_kwh"].iloc[-1])
+    final_usable_soc_kwh = max(final_soc_kwh - battery.min_soc_kwh, 0.0)
     usable_capacity_kwh = battery.max_soc_kwh - battery.min_soc_kwh
     soc_range_utilization = (
         float((soc_values.max() - soc_values.min()) / usable_capacity_kwh)
@@ -185,6 +188,10 @@ def calculate_dispatch_metrics(
         "average_grid_charge_price_eur_per_kwh": average_grid_charge_price,
         "average_battery_discharge_price_eur_per_kwh": (average_battery_discharge_price),
         "grid_charge_arbitrage_spread_eur_per_kwh": grid_charge_arbitrage_spread,
+        "initial_soc_kwh": initial_soc_kwh,
+        "final_soc_kwh": final_soc_kwh,
+        "final_usable_soc_kwh": final_usable_soc_kwh,
+        "soc_change_kwh": final_soc_kwh - initial_soc_kwh,
         "soc_range_utilization": soc_range_utilization,
         "surplus_capture_ratio": (
             surplus_charge_throughput_kwh / available_surplus_kwh
