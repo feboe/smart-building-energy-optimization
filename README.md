@@ -146,6 +146,7 @@ network access, or PostgreSQL.
 | --- | --- |
 | [Battery experiment results](docs/battery/experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
 | [BESS time-resolution comparison](docs/battery/time_resolution_comparison.md) | Hourly versus 15-minute energy, peaks, and simulated operating value |
+| [BESS terminal-value comparison](docs/battery/terminal_value_comparison.md) | Rolling-horizon A/B test with and without terminal SOC valuation |
 | [Battery simulation methodology](docs/battery/simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
 | [Heuristic dispatch](docs/battery/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
 | [LP optimization](docs/battery/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |

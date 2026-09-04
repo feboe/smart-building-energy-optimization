@@ -98,44 +98,8 @@ cost less $v^{terminal}(s_T-S^{min})$. This is a decision aid, not a realised
 cash flow: reported import cost, net cost, and savings do not include a
 terminal-value revenue.
 
-The compact experiment summary reports `initial_soc_kwh`, `final_soc_kwh`,
-`final_usable_soc_kwh`, and `soc_change_kwh`. These inventory KPIs make cost
-comparisons transparent when runs finish with different amounts of stored
-energy. They do not alter the objective or reported operating costs.
-
-## Audit Dispatch Export
-
-The general `run_bess_simulation.py` runner can additionally save an LP audit
-dataset by passing `--dispatch-dir PATH`. It writes one Parquet file per
-resolution, capacity, and LP scenario; the compact result CSV links it through
-`dispatch_file`. Baseline and heuristic results do not receive a separate
-export.
-
-Each audit row represents the first, actually executed decision from one
-rolling-horizon solve. Besides time, input energy and power, all-in prices,
-battery parameters, flows, SOC, interval costs, and the no-battery
-counterfactual, it records constraint headroom and these planning diagnostics:
-
-- number and duration of horizon steps, plus its exclusive end timestamp
-- solver status, terminal-price reference, and terminal value per SOC kWh
-- planned terminal SOC, usable terminal SOC, and terminal credit
-- operating cost, terminal credit, and objective value for the full planned horizon
-
-This makes it possible to review price-driven charge/discharge decisions and
-the effect of terminal SOC valuation later without repeating a long simulation.
-The full overlapping 24-hour LP plans are intentionally not exported.
-
-## Experiment Architecture
-
-The LP, heuristic, KPI calculation, and dispatch validator are shared model
-components. `src/battery/experiment_runner.py` only orchestrates resolved
-batteries and scenarios, including optional parallel jobs. `src/battery/audit.py`
-owns audit-file validation and atomic Parquet writes. The scripts in
-`scripts/battery/` define the study question: `run_capacity_analysis.py` runs
-the established hourly capacity study, while `run_bess_simulation.py` is the
-general 15-minute-first runner and also performs direct resolution comparisons
-with `--resolutions hour 15min`. Shared project assumptions are defined once
-in `experiment_defaults.py`.
+The observed dispatch and cost effects are reported separately in the
+[terminal-value comparison](terminal_value_comparison.md).
 
 ## Energy Balance Constraints
 

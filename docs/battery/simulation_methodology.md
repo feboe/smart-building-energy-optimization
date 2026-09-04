@@ -228,14 +228,60 @@ Dynamic price timing metrics help explain grid charging:
 - average battery discharge price
 - efficiency and degradation adjusted arbitrage spread
 
+The summary also reports the energy inventory at the evaluation boundaries:
+
+- `initial_soc_kwh`: SOC before the first simulated interval
+- `final_soc_kwh`: SOC after the final simulated interval
+- `final_usable_soc_kwh`: final SOC above the technical minimum
+- `soc_change_kwh`: difference between final and initial SOC
+
+These fields expose cost comparisons that start or finish with different
+amounts of stored energy. They describe the simulated result and do not alter
+the optimization objective or reported operating cost.
+
 The arbitrage spread is only a proxy. The dispatch output does not track
 whether a discharged kWh originally came from surplus or from grid charging.
+
+## Experiment Architecture
+
+The LP, heuristic, KPI calculation, and dispatch validator are shared model
+components. `src/battery/experiment_runner.py` orchestrates already resolved
+batteries and scenarios, including optional parallel jobs. The scripts define
+the study configuration: `run_capacity_analysis.py` runs the established
+hourly capacity study, while `run_bess_simulation.py` is the configurable
+15-minute-first runner and can compare resolutions directly.
+
+Shared project assumptions are defined in `experiment_defaults.py`. This keeps
+capacity choices, time windows, and output paths outside the dispatch models.
+
+## Audit Dispatch Export
+
+Passing `--dispatch-dir PATH` to `run_bess_simulation.py` writes one Parquet
+file per resolution, capacity, and LP scenario. The compact summary links each
+LP row through `dispatch_file`; baseline and heuristic results do not receive
+separate audit exports. The target directory must be new or empty.
+
+Each audit row represents the first, actually executed decision from one
+rolling-horizon solve. It contains inputs, prices, battery parameters, energy
+flows, SOC, interval costs, the no-battery counterfactual, constraint headroom,
+and planning diagnostics such as:
+
+- horizon length and exclusive end timestamp
+- solver status and terminal-price reference
+- planned terminal and usable SOC
+- horizon operating cost, terminal credit, and objective value
+
+The export deliberately omits the complete overlapping plans. This keeps one
+row per executed interval while retaining enough information to audit the
+dispatch without repeating the annual simulation. Audit construction,
+directory validation, and atomic Parquet writes are owned by
+`src/battery/audit.py`.
 
 ## Scope and Limitations
 
 The model is intentionally simplified:
 
-- hourly timestep only
+- hourly and 15-minute input data, with hourly prices repeated within the hour
 - no forecast error
 - no quarter-hour market products
 - no battery export to grid
