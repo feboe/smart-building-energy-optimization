@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 
@@ -14,6 +18,84 @@ from src.battery.parameters import (
     BatteryParameters,
     ScenarioParameters,
 )
+
+
+@dataclass(frozen=True)
+class AuditExportConfig:
+    """A prepared destination for immutable LP audit datasets.
+
+    Construction is deliberately separated from experiment execution: a
+    multi-resolution experiment validates its shared directory exactly once,
+    before it starts any worker process.
+    """
+
+    dispatch_dir: Path
+
+
+def create_audit_export_config(dispatch_dir: Path | None) -> AuditExportConfig | None:
+    """Create an empty export directory and return its export configuration."""
+    if dispatch_dir is None:
+        return None
+    directory = Path(dispatch_dir)
+    if directory.exists():
+        if not directory.is_dir():
+            raise ValueError(f"dispatch_dir is not a directory: {directory}")
+        if any(directory.iterdir()):
+            raise ValueError(
+                "dispatch_dir must be new or empty to prevent overwriting "
+                f"existing exports: {directory}"
+            )
+    else:
+        directory.mkdir(parents=True)
+    return AuditExportConfig(dispatch_dir=directory)
+
+
+def dispatch_export_path(
+    audit_export: AuditExportConfig,
+    resolution: str,
+    battery: BatteryParameters,
+    scenario: ScenarioParameters,
+) -> Path:
+    """Return the collision-safe filename for one LP audit dataset."""
+    filename = (
+        f"lp_optimization__{resolution}__{battery.capacity_kwh:g}kwh"
+        f"__{scenario.name}.parquet"
+    )
+    output_path = audit_export.dispatch_dir / filename
+    if output_path.exists():
+        raise FileExistsError(f"Refusing to overwrite dispatch export: {output_path}")
+    return output_path
+
+
+def write_audit_parquet_atomically(audit_df: pd.DataFrame, output_path: Path) -> None:
+    """Publish a Parquet audit dataset without exposing a partial file."""
+    temporary_path = output_path.with_name(
+        f".{output_path.stem}.{os.getpid()}.{uuid4().hex}.tmp.parquet"
+    )
+    try:
+        audit_df.to_parquet(temporary_path, engine="pyarrow", index=False)
+        # Linking publishes atomically and refuses a collision created by another
+        # worker after the earlier existence check.
+        os.link(temporary_path, output_path)
+    except FileExistsError as exc:
+        raise FileExistsError(
+            f"Refusing to overwrite dispatch export: {output_path}"
+        ) from exc
+    except ImportError as exc:
+        raise RuntimeError(
+            "Parquet export requires pyarrow; install requirements.txt first."
+        ) from exc
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def format_export_path(path: Path, project_root: Path) -> str:
+    """Return a portable project-relative path when possible."""
+    try:
+        return str(path.relative_to(project_root))
+    except ValueError:
+        return str(path)
 
 
 def build_lp_audit_dataframe(

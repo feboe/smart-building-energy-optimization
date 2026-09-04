@@ -102,19 +102,18 @@ python scripts/ingest_data.py
 
 ```bash
 # Hourly capacity-sensitivity experiment
-python scripts/battery/run_experiments.py
+python scripts/battery/run_capacity_analysis.py
 
-# Short 7-day resolution comparison (default)
-python scripts/battery/run_resolution_comparison.py
+# General BESS simulation (15-minute resolution by default)
+python scripts/battery/run_bess_simulation.py
 
-# Full-year resolution comparison
-python scripts/battery/run_resolution_comparison.py --days 365
+# Compare hourly and 15-minute resolution
+python scripts/battery/run_bess_simulation.py --resolutions hour 15min
 ```
 
-Battery settings are editable constants at the top of the experiment script.
-The capacity summary is written to `results/battery/experiment_results.csv`;
-the resolution comparison writes
-`results/battery/time_resolution_comparison.csv`.
+Shared assumptions are defined in `scripts/battery/experiment_defaults.py`.
+Configuration options, terminal-value comparisons, and audit exports are
+documented in the [BESS LP methodology](docs/battery/lp_optimization.md).
 
 ### Run Load Forecasting
 
