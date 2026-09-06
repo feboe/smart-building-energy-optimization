@@ -27,8 +27,8 @@ directly.
 | Dynamic grid-charging LP | Without terminal value | With terminal value | Change |
 | --- | ---: | ---: | ---: |
 | Operational savings | 14,158.94 EUR | 14,189.07 EUR | +30.13 EUR |
-| Grid import | Reference | 176.57 kWh lower | -176.57 kWh |
-| Approximate full cycles | Reference | 0.68 fewer | -0.68 |
+| Grid import | 1,188,352.01 kWh | 1,188,175.44 kWh | -176.57 kWh |
+| Approximate full cycles | 177.30 | 176.62 | -0.68 |
 | Peak grid import | approximately 500 kW | approximately 500 kW | unchanged |
 
 The terminal value changes 541 of 35,040 executed intervals, or 1.54%. Its
