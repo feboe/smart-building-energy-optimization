@@ -31,7 +31,9 @@ EXPERIMENT_NAME = "capacity_sensitivity"
 ANALYSIS_RESOLUTION = "hour"
 CAPACITIES_KWH = [250, 500, 1000, 2000]
 MAX_PARALLEL_WORKERS = DEFAULT_MAX_PARALLEL_WORKERS
-RESULTS_PATH = PROJECT_ROOT / "results" / "battery" / "experiment_results.csv"
+RESULTS_PATH = (
+    PROJECT_ROOT / "results" / "battery" / "capacity_analysis__hour__2021.csv"
+)
 
 
 def run_capacity_sensitivity(
