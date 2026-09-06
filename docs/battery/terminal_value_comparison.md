@@ -41,8 +41,10 @@ annual cost effect is small, but the local dispatch effect can be substantial.
 The selected period contains the largest SOC difference in the annual dynamic
 grid-charging comparison. Without a terminal value, energy has no value beyond
 the active planning horizon and the LP begins discharging earlier. With the
-four-hour terminal value, the battery retains up to 293 kWh more energy and
-uses it in later intervals.
+four-hour terminal value, retaining the energy is more valuable at that point;
+the battery holds up to 293 kWh more energy for later intervals. The terminal
+value is derived from the mean all-in price over hours 20 to 24 of each rolling
+horizon, as described in the [LP model](lp_optimization.md#terminal-energy-value).
 
 ## Interpretation
 
