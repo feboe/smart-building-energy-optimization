@@ -2,8 +2,9 @@
 
 import pandas as pd
 
-from src.battery.data import prepare_simulation_data
+from src.battery.data import prepare_bess_simulation_data, prepare_simulation_data
 from src.battery.parameters import (
+    BESS_MODEL_VERSION,
     FIXED_SURPLUS_ONLY,
     BatteryParameters,
     ScenarioParameters,
@@ -80,7 +81,7 @@ def calculate_dispatch_metrics(
     scenario: ScenarioParameters,
 ) -> dict[str, float | str | None]:
     """Calculate metrics for one BESS dispatch result."""
-    prepared_df = prepare_simulation_data(analysis_df, scenario)
+    prepared_df = prepare_bess_simulation_data(analysis_df, scenario, battery)
     if len(prepared_df) != len(dispatch_df):
         raise ValueError("analysis_df and dispatch_df must have the same row count.")
 
@@ -159,6 +160,7 @@ def calculate_dispatch_metrics(
 
     return {
         "scenario": scenario.name,
+        "model_version": BESS_MODEL_VERSION,
         "dispatch_strategy": scenario.dispatch_strategy,
         "price_model": price_model,
         "capacity_kwh": battery.capacity_kwh,
@@ -168,6 +170,14 @@ def calculate_dispatch_metrics(
         "discharge_c_rate": battery.discharge_c_rate,
         "grid_connection_limit_kw": scenario.grid_connection_limit_kw,
         "degradation_cost_eur_per_kwh": battery.degradation_cost_eur_per_kwh,
+        "standby_power_kw": battery.standby_power_kw,
+        "self_discharge_rate_per_month": battery.self_discharge_rate_per_month,
+        "bess_standby_consumption_kwh": float(
+            dispatch_df["bess_standby_consumption_kwh"].sum()
+        ),
+        "self_discharge_loss_kwh": float(
+            dispatch_df["self_discharge_loss_kwh"].sum()
+        ),
         "grid_import_cost_eur": grid_import_cost_eur,
         "grid_export_revenue_eur": grid_export_revenue_eur,
         "electricity_net_cost_eur": electricity_net_cost_eur,

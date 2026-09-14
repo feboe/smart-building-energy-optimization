@@ -11,6 +11,8 @@ DISPATCH_COLUMNS = [
     "local_timestamp",
     "timestep_hours",
     "gross_load_kwh",
+    "bess_standby_consumption_kwh",
+    "site_load_with_bess_kwh",
     "local_generation_kwh",
     "available_surplus_kwh",
     "demand_after_generation_kwh",
@@ -29,6 +31,7 @@ DISPATCH_COLUMNS = [
     "grid_import_kwh",
     "grid_export_kwh",
     "soc_start_kwh",
+    "self_discharge_loss_kwh",
     "soc_end_kwh",
 ]
 
@@ -73,6 +76,28 @@ def max_discharge_to_load_kwh(
     return max(min(power_limited_output, capacity_limited_output), 0)
 
 
+def self_discharge_loss_kwh(
+    soc_kwh: float,
+    battery: BatteryParameters,
+    timestep_hours: float = 1.0,
+) -> float:
+    """Return passive SOC loss above the technical minimum for one interval."""
+    usable_soc_kwh = max(soc_kwh - battery.min_soc_kwh, 0.0)
+    retention = (1 - battery.self_discharge_rate_per_month) ** (
+        timestep_hours / 720.0
+    )
+    return usable_soc_kwh * (1 - retention)
+
+
+def soc_after_self_discharge_kwh(
+    soc_kwh: float,
+    battery: BatteryParameters,
+    timestep_hours: float = 1.0,
+) -> float:
+    """Return SOC after the interval's passive loss and before dispatch."""
+    return soc_kwh - self_discharge_loss_kwh(soc_kwh, battery, timestep_hours)
+
+
 def validate_dispatch_results(
     dispatch_df: pd.DataFrame,
     battery: BatteryParameters,
@@ -101,6 +126,8 @@ def validate_dispatch_results(
     finite_columns = [
         "timestep_hours",
         "gross_load_kwh",
+        "bess_standby_consumption_kwh",
+        "site_load_with_bess_kwh",
         "local_generation_kwh",
         "available_surplus_kwh",
         "demand_after_generation_kwh",
@@ -108,6 +135,7 @@ def validate_dispatch_results(
         "dynamic_import_price_eur_per_kwh",
         *nonnegative_columns,
         "soc_start_kwh",
+        "self_discharge_loss_kwh",
         "soc_end_kwh",
     ]
     for column in finite_columns:
@@ -117,6 +145,18 @@ def validate_dispatch_results(
             raise ValueError(f"{column} contains non-finite values.")
 
     for column in nonnegative_columns:
+        if (dispatch_df[column] < -tolerance).any():
+            raise ValueError(f"{column} contains negative values.")
+
+    for column in (
+        "gross_load_kwh",
+        "bess_standby_consumption_kwh",
+        "site_load_with_bess_kwh",
+        "local_generation_kwh",
+        "available_surplus_kwh",
+        "demand_after_generation_kwh",
+        "self_discharge_loss_kwh",
+    ):
         if (dispatch_df[column] < -tolerance).any():
             raise ValueError(f"{column} contains negative values.")
 
@@ -134,6 +174,49 @@ def validate_dispatch_results(
 
     if (dispatch_df["soc_end_kwh"] > battery.max_soc_kwh + tolerance).any():
         raise ValueError("SOC end exceeds the configured maximum.")
+
+    expected_standby_kwh = battery.standby_power_kw * dispatch_df["timestep_hours"]
+    standby_error = (
+        dispatch_df["bess_standby_consumption_kwh"] - expected_standby_kwh
+    ).abs()
+    if (standby_error > tolerance).any():
+        raise ValueError("BESS standby consumption is inconsistent.")
+
+    site_load_error = (
+        dispatch_df["site_load_with_bess_kwh"]
+        - dispatch_df["gross_load_kwh"]
+        - dispatch_df["bess_standby_consumption_kwh"]
+    ).abs()
+    if (site_load_error > tolerance).any():
+        raise ValueError("BESS site load is inconsistent.")
+
+    surplus_error = (
+        dispatch_df["available_surplus_kwh"]
+        - (dispatch_df["local_generation_kwh"] - dispatch_df["site_load_with_bess_kwh"])
+        .clip(lower=0)
+    ).abs()
+    demand_error = (
+        dispatch_df["demand_after_generation_kwh"]
+        - (dispatch_df["site_load_with_bess_kwh"] - dispatch_df["local_generation_kwh"])
+        .clip(lower=0)
+    ).abs()
+    if (surplus_error > tolerance).any() or (demand_error > tolerance).any():
+        raise ValueError("BESS net-load columns are inconsistent.")
+
+    expected_self_discharge_kwh = pd.Series(
+        [
+            self_discharge_loss_kwh(float(soc), battery, float(dt))
+            for soc, dt in zip(
+                dispatch_df["soc_start_kwh"], dispatch_df["timestep_hours"]
+            )
+        ],
+        index=dispatch_df.index,
+    )
+    self_discharge_error = (
+        dispatch_df["self_discharge_loss_kwh"] - expected_self_discharge_kwh
+    ).abs()
+    if (self_discharge_error > tolerance).any():
+        raise ValueError("Self-discharge loss is inconsistent.")
 
     battery_charge_error = (
         dispatch_df["battery_charge_kwh"]
@@ -185,7 +268,7 @@ def validate_dispatch_results(
         dispatch_df["local_generation_kwh"]
         + dispatch_df["grid_import_kwh"]
         + dispatch_df["discharge_to_load_kwh"]
-        - dispatch_df["gross_load_kwh"]
+        - dispatch_df["site_load_with_bess_kwh"]
         - dispatch_df["charge_from_surplus_kwh"]
         - dispatch_df["charge_from_grid_kwh"]
         - dispatch_df["grid_export_kwh"]
@@ -195,6 +278,7 @@ def validate_dispatch_results(
 
     soc_balance_error = (
         dispatch_df["soc_start_kwh"]
+        - dispatch_df["self_discharge_loss_kwh"]
         + dispatch_df["battery_charge_kwh"] * battery.eta_charge
         - dispatch_df["discharge_to_load_kwh"] / battery.eta_discharge
         - dispatch_df["soc_end_kwh"]

@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.config import DatabaseConfig, load_database_config
 from src.database import create_analysis_views, create_tables, open_connection
-from src.battery.parameters import ScenarioParameters
+from src.battery.parameters import BatteryParameters, ScenarioParameters
 
 ANALYSIS_VIEW_NAMES = {
     "hour": "smart_company_analysis_hourly",
@@ -193,6 +193,36 @@ def prepare_simulation_data(
         prepared_df["gross_load_kwh"] - prepared_df["local_generation_kwh"]
     ).clip(lower=0)
 
+    return prepared_df
+
+
+def prepare_bess_simulation_data(
+    df: pd.DataFrame,
+    scenario: ScenarioParameters,
+    battery: BatteryParameters,
+) -> pd.DataFrame:
+    """Add BESS-site energy columns without changing the no-battery baseline.
+
+    ``gross_load_kwh`` remains the reconstructed historical building load.
+    Standby is an always-on AC-side BESS load and therefore participates in the
+    local-generation, battery, and grid energy balance only for BESS runs.
+    """
+    prepared_df = prepare_simulation_data(df, scenario)
+    prepared_df["bess_standby_consumption_kwh"] = (
+        battery.standby_power_kw * prepared_df["timestep_hours"]
+    )
+    prepared_df["site_load_with_bess_kwh"] = (
+        prepared_df["gross_load_kwh"]
+        + prepared_df["bess_standby_consumption_kwh"]
+    )
+    prepared_df["available_surplus_kwh"] = (
+        prepared_df["local_generation_kwh"]
+        - prepared_df["site_load_with_bess_kwh"]
+    ).clip(lower=0)
+    prepared_df["demand_after_generation_kwh"] = (
+        prepared_df["site_load_with_bess_kwh"]
+        - prepared_df["local_generation_kwh"]
+    ).clip(lower=0)
     return prepared_df
 
 

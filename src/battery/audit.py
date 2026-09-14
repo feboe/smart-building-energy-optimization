@@ -10,10 +10,15 @@ from uuid import uuid4
 
 import pandas as pd
 
-from src.battery.data import prepare_simulation_data
-from src.battery.dispatch import max_charge_input_kwh, max_discharge_to_load_kwh
+from src.battery.data import prepare_bess_simulation_data, prepare_simulation_data
+from src.battery.dispatch import (
+    max_charge_input_kwh,
+    max_discharge_to_load_kwh,
+    soc_after_self_discharge_kwh,
+)
 from src.battery.metrics import fixed_import_price
 from src.battery.parameters import (
+    BESS_MODEL_VERSION,
     FIXED_SURPLUS_ONLY,
     BatteryParameters,
     ScenarioParameters,
@@ -123,7 +128,12 @@ def build_lp_audit_dataframe(
             f"{missing_diagnostics}"
         )
 
-    prepared_df = prepare_simulation_data(analysis_df, scenario).reset_index(drop=True)
+    prepared_df = prepare_bess_simulation_data(
+        analysis_df,
+        scenario,
+        battery,
+    ).reset_index(drop=True)
+    baseline_df = prepare_simulation_data(analysis_df, scenario).reset_index(drop=True)
     dispatch = dispatch_df.reset_index(drop=True).copy()
     if len(prepared_df) != len(dispatch):
         raise ValueError("analysis_df and dispatch_df must have the same row count.")
@@ -139,8 +149,8 @@ def build_lp_audit_dataframe(
         used_import_price = prepared_df["dynamic_import_price_eur_per_kwh"].astype(float)
         price_model = "dynamic"
 
-    baseline_import_kwh = prepared_df["grid_import_kwh"].astype(float)
-    baseline_export_kwh = prepared_df["grid_export_kwh"].astype(float)
+    baseline_import_kwh = baseline_df["grid_import_kwh"].astype(float)
+    baseline_export_kwh = baseline_df["grid_export_kwh"].astype(float)
     grid_import_kwh = dispatch["grid_import_kwh"].astype(float)
     grid_export_kwh = dispatch["grid_export_kwh"].astype(float)
     discharge_kwh = dispatch["discharge_to_load_kwh"].astype(float)
@@ -158,7 +168,11 @@ def build_lp_audit_dataframe(
 
     charge_input_available_kwh = pd.Series(
         [
-            max_charge_input_kwh(float(soc), battery, float(dt))
+            max_charge_input_kwh(
+                soc_after_self_discharge_kwh(float(soc), battery, float(dt)),
+                battery,
+                float(dt),
+            )
             for soc, dt in zip(dispatch["soc_start_kwh"], timestep_hours)
         ],
         index=dispatch.index,
@@ -166,7 +180,11 @@ def build_lp_audit_dataframe(
     )
     discharge_available_kwh = pd.Series(
         [
-            max_discharge_to_load_kwh(float(soc), battery, float(dt))
+            max_discharge_to_load_kwh(
+                soc_after_self_discharge_kwh(float(soc), battery, float(dt)),
+                battery,
+                float(dt),
+            )
             for soc, dt in zip(dispatch["soc_start_kwh"], timestep_hours)
         ],
         index=dispatch.index,
@@ -189,11 +207,22 @@ def build_lp_audit_dataframe(
             "resolution": prepared_df["resolution"],
             "timestep_hours": timestep_hours,
             "method": "lp_optimization",
+            "model_version": BESS_MODEL_VERSION,
             "scenario": scenario.name,
             "dispatch_strategy": scenario.dispatch_strategy,
             "price_model": price_model,
             "gross_load_kw": prepared_df["gross_load_kw"],
             "gross_load_kwh": prepared_df["gross_load_kwh"],
+            "bess_standby_consumption_kwh": dispatch[
+                "bess_standby_consumption_kwh"
+            ],
+            "bess_standby_consumption_kw": dispatch[
+                "bess_standby_consumption_kwh"
+            ]
+            / timestep_hours,
+            "site_load_with_bess_kwh": dispatch["site_load_with_bess_kwh"],
+            "site_load_with_bess_kw": dispatch["site_load_with_bess_kwh"]
+            / timestep_hours,
             "pv_generation_kw": prepared_df["pv_generation_kw"],
             "pv_generation_kwh": prepared_df["pv_generation_kwh"],
             "chp_generation_kw": prepared_df["chp_generation_kw"],
@@ -232,6 +261,8 @@ def build_lp_audit_dataframe(
             "eta_charge": battery.eta_charge,
             "eta_discharge": battery.eta_discharge,
             "degradation_cost_eur_per_kwh": battery.degradation_cost_eur_per_kwh,
+            "standby_power_kw": battery.standby_power_kw,
+            "self_discharge_rate_per_month": battery.self_discharge_rate_per_month,
             "grid_connection_limit_kw": scenario.grid_connection_limit_kw,
             "planning_horizon_hours": scenario.horizon_hours,
             "terminal_value_window_hours": scenario.terminal_value_window_hours,
@@ -251,6 +282,7 @@ def build_lp_audit_dataframe(
             "grid_import_kw": grid_import_kwh / timestep_hours,
             "grid_export_kw": grid_export_kwh / timestep_hours,
             "soc_start_kwh": dispatch["soc_start_kwh"],
+            "self_discharge_loss_kwh": dispatch["self_discharge_loss_kwh"],
             "soc_end_kwh": dispatch["soc_end_kwh"],
             "soc_start_pct": dispatch["soc_start_kwh"] / battery.capacity_kwh * 100,
             "soc_end_pct": dispatch["soc_end_kwh"] / battery.capacity_kwh * 100,

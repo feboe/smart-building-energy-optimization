@@ -18,6 +18,8 @@ def make_battery_parameters(
     eta_charge: float = 0.95,
     eta_discharge: float = 0.95,
     degradation_cost_eur_per_kwh: float = 0.0,
+    standby_power_kw: float = 0.0,
+    self_discharge_rate_per_month: float = 0.0,
 ) -> BatteryParameters:
     """Build battery parameters with project defaults."""
     return BatteryParameters(
@@ -29,6 +31,8 @@ def make_battery_parameters(
         eta_charge=eta_charge,
         eta_discharge=eta_discharge,
         degradation_cost_eur_per_kwh=degradation_cost_eur_per_kwh,
+        standby_power_kw=standby_power_kw,
+        self_discharge_rate_per_month=self_discharge_rate_per_month,
     )
 
 

@@ -2,12 +2,13 @@
 
 import pandas as pd
 
-from src.battery.data import prepare_simulation_data
+from src.battery.data import prepare_bess_simulation_data
 from src.battery.dispatch import (
     DISPATCH_COLUMNS,
     horizon_steps,
     max_charge_input_kwh,
     max_discharge_to_load_kwh,
+    self_discharge_loss_kwh,
     validate_dispatch_results,
 )
 from src.battery.parameters import (
@@ -26,7 +27,7 @@ def run_heuristic_dispatch(
     initial_soc_kwh: float | None = None,
 ) -> pd.DataFrame:
     """Run the heuristic dispatch rule configured by the scenario."""
-    prepared_df = prepare_simulation_data(analysis_df, scenario)
+    prepared_df = prepare_bess_simulation_data(analysis_df, scenario, battery)
     soc_kwh = _initial_soc(initial_soc_kwh, battery)
 
     if scenario.dispatch_strategy == FIXED_SURPLUS_ONLY:
@@ -113,6 +114,12 @@ def _run_dispatch_loop(
             is_high_price = False
 
         soc_start_kwh = soc_kwh
+        self_discharge_loss = self_discharge_loss_kwh(
+            soc_start_kwh,
+            battery,
+            timestep_hours,
+        )
+        soc_kwh -= self_discharge_loss
         available_surplus_kwh = float(row["available_surplus_kwh"])
         demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
         charge_power_remaining_kwh = battery.max_charge_power_kw * timestep_hours
@@ -187,6 +194,10 @@ def _run_dispatch_loop(
                 "local_timestamp": row["local_timestamp"],
                 "timestep_hours": timestep_hours,
                 "gross_load_kwh": row["gross_load_kwh"],
+                "bess_standby_consumption_kwh": row[
+                    "bess_standby_consumption_kwh"
+                ],
+                "site_load_with_bess_kwh": row["site_load_with_bess_kwh"],
                 "local_generation_kwh": row["local_generation_kwh"],
                 "available_surplus_kwh": available_surplus_kwh,
                 "demand_after_generation_kwh": demand_after_generation_kwh,
@@ -205,6 +216,7 @@ def _run_dispatch_loop(
                 "grid_import_kwh": grid_import_kwh,
                 "grid_export_kwh": grid_export_kwh,
                 "soc_start_kwh": soc_start_kwh,
+                "self_discharge_loss_kwh": self_discharge_loss,
                 "soc_end_kwh": soc_kwh,
             }
         )

@@ -7,6 +7,7 @@ from numbers import Real
 FIXED_SURPLUS_ONLY = "fixed_surplus_only"
 DYNAMIC_SURPLUS_ONLY = "dynamic_surplus_only"
 DYNAMIC_SURPLUS_GRID_CHARGING = "dynamic_surplus_grid_charging"
+BESS_MODEL_VERSION = "2.0"
 
 VALID_DISPATCH_STRATEGIES = {
     FIXED_SURPLUS_ONLY,
@@ -27,6 +28,8 @@ class BatteryParameters:
     eta_charge: float = 0.95
     eta_discharge: float = 0.95
     degradation_cost_eur_per_kwh: float = 0.0
+    standby_power_kw: float = 0.0
+    self_discharge_rate_per_month: float = 0.0
 
     def __post_init__(self) -> None:
         if (
@@ -54,10 +57,24 @@ class BatteryParameters:
             raise ValueError("eta_charge must satisfy 0 < eta_charge <= 1.")
         if not 0 < self.eta_discharge <= 1:
             raise ValueError("eta_discharge must satisfy 0 < eta_discharge <= 1.")
-        if self.degradation_cost_eur_per_kwh < 0:
-            raise ValueError(
-                "degradation_cost_eur_per_kwh must be greater than or equal " "to zero."
-            )
+        for value, name, upper_bound in (
+            (self.degradation_cost_eur_per_kwh, "degradation_cost_eur_per_kwh", None),
+            (self.standby_power_kw, "standby_power_kw", None),
+            (
+                self.self_discharge_rate_per_month,
+                "self_discharge_rate_per_month",
+                1.0,
+            ),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, Real)
+                or not math.isfinite(value)
+                or value < 0
+                or (upper_bound is not None and value >= upper_bound)
+            ):
+                comparison = "less than 1" if upper_bound is not None else "non-negative"
+                raise ValueError(f"{name} must be finite and {comparison}.")
 
     @property
     def min_soc_kwh(self) -> float:

@@ -5,12 +5,13 @@ import math
 import pandas as pd
 import pulp
 
-from src.battery.data import prepare_simulation_data
+from src.battery.data import prepare_bess_simulation_data
 from src.battery.dispatch import (
     DISPATCH_COLUMNS,
     horizon_steps,
     max_charge_input_kwh,
     max_discharge_to_load_kwh,
+    self_discharge_loss_kwh,
     validate_dispatch_results,
 )
 from src.battery.metrics import fixed_import_price
@@ -55,7 +56,7 @@ def run_optimized_dispatch(
     include_horizon_diagnostics: bool = False,
 ) -> pd.DataFrame:
     """Run rolling-horizon LP dispatch for one BESS scenario."""
-    prepared_df = prepare_simulation_data(analysis_df, scenario)
+    prepared_df = prepare_bess_simulation_data(analysis_df, scenario, battery)
     soc_kwh = _initial_soc(initial_soc_kwh, battery)
     fixed_price = fixed_import_price(prepared_df, scenario)
 
@@ -195,9 +196,13 @@ def _solve_horizon(
         else:
             model += charge_from_grid[step] == 0, f"disable_grid_charge_{step}"
 
+        retention = (1 - battery.self_discharge_rate_per_month) ** (
+            timestep_hours / 720.0
+        )
         model += (
             soc[step]
-            == previous_soc
+            == retention * previous_soc
+            + (1 - retention) * battery.min_soc_kwh
             + (charge_from_surplus[step] + charge_from_grid[step]) * battery.eta_charge
             - discharge_to_load[step] / battery.eta_discharge
         ), f"soc_balance_{step}"
@@ -270,8 +275,18 @@ def _build_dispatch_record(
     demand_after_generation_kwh = float(row["demand_after_generation_kwh"])
     current_price = float(row["dynamic_import_price_eur_per_kwh"])
     timestep_hours = float(row["timestep_hours"])
+    self_discharge_loss = self_discharge_loss_kwh(
+        soc_start_kwh,
+        battery,
+        timestep_hours,
+    )
+    soc_after_self_discharge_kwh = soc_start_kwh - self_discharge_loss
 
-    max_charge_kwh = max_charge_input_kwh(soc_start_kwh, battery, timestep_hours)
+    max_charge_kwh = max_charge_input_kwh(
+        soc_after_self_discharge_kwh,
+        battery,
+        timestep_hours,
+    )
     charge_from_surplus_kwh = _clean_bound_value(
         float(solution["charge_from_surplus_kwh"]),
         lower_bound=0.0,
@@ -287,7 +302,11 @@ def _build_dispatch_record(
         lower_bound=0.0,
         upper_bound=min(
             demand_after_generation_kwh,
-            max_discharge_to_load_kwh(soc_start_kwh, battery, timestep_hours),
+            max_discharge_to_load_kwh(
+                soc_after_self_discharge_kwh,
+                battery,
+                timestep_hours,
+            ),
         ),
     )
     battery_charge_kwh = _clean_value(charge_from_surplus_kwh + charge_from_grid_kwh)
@@ -297,7 +316,7 @@ def _build_dispatch_record(
     )
     grid_export_kwh = _clean_value(available_surplus_kwh - charge_from_surplus_kwh)
     soc_end_kwh = _clean_soc_value(
-        soc_start_kwh
+        soc_after_self_discharge_kwh
         + battery_charge_kwh * battery.eta_charge
         - discharge_to_load_kwh / battery.eta_discharge,
         battery,
@@ -315,6 +334,8 @@ def _build_dispatch_record(
         "local_timestamp": row["local_timestamp"],
         "timestep_hours": timestep_hours,
         "gross_load_kwh": row["gross_load_kwh"],
+        "bess_standby_consumption_kwh": row["bess_standby_consumption_kwh"],
+        "site_load_with_bess_kwh": row["site_load_with_bess_kwh"],
         "local_generation_kwh": row["local_generation_kwh"],
         "available_surplus_kwh": available_surplus_kwh,
         "demand_after_generation_kwh": demand_after_generation_kwh,
@@ -333,6 +354,7 @@ def _build_dispatch_record(
         "grid_import_kwh": grid_import_kwh,
         "grid_export_kwh": grid_export_kwh,
         "soc_start_kwh": soc_start_kwh,
+        "self_discharge_loss_kwh": self_discharge_loss,
         "soc_end_kwh": soc_end_kwh,
     }
     if include_horizon_diagnostics:

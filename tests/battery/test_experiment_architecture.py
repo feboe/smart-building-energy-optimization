@@ -17,6 +17,7 @@ from scripts.battery.experiment_defaults import (
     HORIZON_HOURS,
     make_standard_batteries,
     make_standard_scenarios,
+    make_passive_loss_reference_battery,
 )
 from src.battery.audit import create_audit_export_config
 from src.battery.experiment_runner import run_bess_experiment
@@ -55,6 +56,11 @@ def test_standard_builders_keep_established_assumptions() -> None:
     assert battery.eta_charge == ETA_CHARGE
     assert battery.eta_discharge == ETA_DISCHARGE
     assert battery.degradation_cost_eur_per_kwh == DEGRADATION_COST_EUR_PER_KWH
+    assert battery.standby_power_kw == 0.0
+    assert battery.self_discharge_rate_per_month == 0.0
+    passive_loss_reference_battery = make_passive_loss_reference_battery(1000)
+    assert passive_loss_reference_battery.standby_power_kw == 5.0
+    assert passive_loss_reference_battery.self_discharge_rate_per_month == 0.01
     assert [scenario.name for scenario in scenarios] == [
         "fixed_surplus_only",
         "dynamic_surplus_only",

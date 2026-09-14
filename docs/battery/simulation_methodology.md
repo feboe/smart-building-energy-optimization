@@ -83,6 +83,8 @@ The battery is modeled with a small set of physical assumptions:
 - charge and discharge efficiency
 - independent charge and discharge power limits in kW
 - optional degradation proxy based on discharged throughput
+- optional always-on AC-side standby power
+- optional passive self-discharge rate per 30-day month
 
 Capacity and directional power are separate model inputs. This permits, for
 example, a 1,000 kWh battery to be represented with a 250 kW or 500 kW power
@@ -96,14 +98,41 @@ This corresponds to a derived charge and discharge C-rate of 0.5 C. The
 capacity experiment retains 0.5 C only as an experiment assumption used to
 calculate those explicit power limits.
 
-The SOC balance is:
+`gross_load_kwh` always remains the historical building load. For BESS runs,
+the model adds configured standby power as an AC-side site load in every
+interval:
+
+```text
+bess_standby_consumption_kwh = standby_power_kw * timestep_hours
+site_load_with_bess_kwh = gross_load_kwh + bess_standby_consumption_kwh
+```
+
+Local generation serves this total site load before a residual is supplied by
+the battery or grid. The no-battery baseline deliberately excludes this BESS
+load, so savings remain baseline cost minus BESS-run cost and the cost per
+load-kWh denominator remains the historical building load.
+
+Before charging or discharging, passive self-discharge reduces only SOC above
+the technical minimum. With monthly rate `r` and interval duration `dt`, the
+retention is `(1 - r)^(dt / 720)`. This keeps hourly and 15-minute results
+consistent and leaves the technical minimum untouched.
+
+The SOC balance is therefore:
 
 ```text
 soc_end =
     soc_start
+    - self_discharge_loss_kwh
     + battery_charge_kwh * eta_charge
     - discharge_to_load_kwh / eta_discharge
 ```
+
+Charge and discharge availability use SOC after passive loss. Efficiency losses
+remain throughput-dependent AC/SOC conversion losses; they are not counted
+again as standby or self-discharge. Standard experiment batteries keep both
+passive-loss inputs at zero for reproducibility; the separate passive-loss
+reference builder uses the sensitivity values of 5 kW standby and 1% monthly
+self-discharge.
 
 The battery only discharges to serve local load. It does not export stored
 energy to the grid. Grid export is therefore only leftover local surplus after
@@ -190,7 +219,8 @@ The shared validator enforces the physical contract:
 - the battery cannot discharge more than remaining demand
 - no simultaneous charge and discharge appears in the final dispatch output
 - grid export equals leftover local surplus
-- hourly energy balance and SOC balance are consistent
+- interval energy and SOC balance are consistent, including BESS standby and
+  passive self-discharge
 
 This validation layer is useful because it checks both the simple heuristic and
 the optimization output against the same physical rules.

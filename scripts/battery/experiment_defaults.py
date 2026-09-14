@@ -17,6 +17,8 @@ MAX_SOC_FRACTION = 1.00
 ETA_CHARGE = 0.95
 ETA_DISCHARGE = 0.95
 DEGRADATION_COST_EUR_PER_KWH = 0.03
+PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW = 5.0
+PASSIVE_LOSS_REFERENCE_SELF_DISCHARGE_RATE_PER_MONTH = 0.01
 
 IMPORT_MARKUP_EUR_PER_KWH = 0.115
 EXPORT_PRICE_EUR_PER_KWH = 0.08
@@ -43,6 +45,24 @@ def make_standard_battery(capacity_kwh: float) -> BatteryParameters:
 def make_standard_batteries(capacities_kwh: list[float]) -> list[BatteryParameters]:
     """Resolve capacity inputs to the standard battery parameter objects."""
     return [make_standard_battery(capacity_kwh) for capacity_kwh in capacities_kwh]
+
+
+def make_passive_loss_reference_battery(capacity_kwh: float) -> BatteryParameters:
+    """Return the passive-loss reference battery; standards stay lossless."""
+    return make_battery_parameters(
+        capacity_kwh=capacity_kwh,
+        max_charge_power_kw=capacity_kwh * C_RATE,
+        max_discharge_power_kw=capacity_kwh * C_RATE,
+        min_soc_fraction=MIN_SOC_FRACTION,
+        max_soc_fraction=MAX_SOC_FRACTION,
+        eta_charge=ETA_CHARGE,
+        eta_discharge=ETA_DISCHARGE,
+        degradation_cost_eur_per_kwh=DEGRADATION_COST_EUR_PER_KWH,
+        standby_power_kw=PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW,
+        self_discharge_rate_per_month=(
+            PASSIVE_LOSS_REFERENCE_SELF_DISCHARGE_RATE_PER_MONTH
+        ),
+    )
 
 
 def make_standard_scenarios(

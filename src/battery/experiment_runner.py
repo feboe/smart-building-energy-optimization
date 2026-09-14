@@ -21,7 +21,11 @@ from src.battery.audit import (
 from src.battery.heuristic import run_heuristic_dispatch
 from src.battery.metrics import calculate_baseline_metrics, calculate_dispatch_metrics
 from src.battery.optimization import run_optimized_dispatch
-from src.battery.parameters import BatteryParameters, ScenarioParameters
+from src.battery.parameters import (
+    BESS_MODEL_VERSION,
+    BatteryParameters,
+    ScenarioParameters,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +36,7 @@ METADATA_COLUMNS = [
     "run_timestamp",
     "elapsed_seconds",
     "method",
+    "model_version",
     "scenario",
     "price_model",
     "capacity_kwh",
@@ -39,6 +44,8 @@ METADATA_COLUMNS = [
     "max_discharge_power_kw",
     "charge_c_rate",
     "discharge_c_rate",
+    "standby_power_kw",
+    "self_discharge_rate_per_month",
     "import_markup_eur_per_kwh",
     "export_price_eur_per_kwh",
     "horizon_hours",
@@ -324,6 +331,8 @@ def _baseline_row(
         "discharge_c_rate": None,
         "grid_connection_limit_kw": None,
         "degradation_cost_eur_per_kwh": 0.0,
+        "bess_standby_consumption_kwh": 0.0,
+        "self_discharge_loss_kwh": 0.0,
         "grid_import_cost_eur": grid_import_cost_eur,
         "grid_export_revenue_eur": baseline_metrics["baseline_grid_export_revenue_eur"],
         "electricity_net_cost_eur": electricity_net_cost_eur,
@@ -372,6 +381,7 @@ def _with_metadata(
             "run_timestamp": run_timestamp,
             "elapsed_seconds": elapsed_seconds,
             "method": method,
+            "model_version": BESS_MODEL_VERSION,
             "import_markup_eur_per_kwh": scenario.import_markup_eur_per_kwh,
             "export_price_eur_per_kwh": scenario.export_price_eur_per_kwh,
             "horizon_hours": scenario.horizon_hours,
@@ -387,6 +397,14 @@ def _with_metadata(
             "eta_discharge": battery.eta_discharge,
             "min_soc_fraction": battery.min_soc_fraction,
             "max_soc_fraction": battery.max_soc_fraction,
+            "standby_power_kw": (
+                0.0 if method == "baseline" else battery.standby_power_kw
+            ),
+            "self_discharge_rate_per_month": (
+                0.0
+                if method == "baseline"
+                else battery.self_discharge_rate_per_month
+            ),
         }
     )
     return enriched_row
