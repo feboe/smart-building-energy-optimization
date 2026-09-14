@@ -109,6 +109,11 @@ python scripts/battery/run_bess_simulation.py
 
 # Compare hourly and 15-minute resolution
 python scripts/battery/run_bess_simulation.py --resolutions hour 15min
+
+# Include 2.5 kW auxiliary demand and 1% monthly self-discharge
+python scripts/battery/run_bess_simulation.py \
+  --standby-power-kw 2.5 \
+  --self-discharge-rate-per-month 0.01
 ```
 
 Shared assumptions are defined in `scripts/battery/experiment_defaults.py`.
@@ -147,6 +152,7 @@ network access, or PostgreSQL.
 | [Battery experiment results](docs/battery/experiment_results.md) | Findings, charts, capacity sensitivity, runtime, and limitations |
 | [BESS time-resolution comparison](docs/battery/time_resolution_comparison.md) | Hourly versus 15-minute energy, peaks, and simulated operating value |
 | [BESS terminal-value comparison](docs/battery/terminal_value_comparison.md) | Rolling-horizon A/B test with and without terminal SOC valuation |
+| [BESS passive-loss comparison](docs/battery/passive_loss_comparison.md) | Impact of auxiliary consumption and self-discharge on simulated operating value |
 | [Battery simulation methodology](docs/battery/simulation_methodology.md) | Energy conventions, pricing, battery model, metrics, and validation |
 | [Heuristic dispatch](docs/battery/heuristic_dispatch.md) | Rule-based controller and rolling price thresholds |
 | [LP optimization](docs/battery/lp_optimization.md) | Objective, constraints, rolling horizon, and modeling choices |
