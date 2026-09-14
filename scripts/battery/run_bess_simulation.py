@@ -37,6 +37,8 @@ def run_bess_simulation(
     terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
     dispatch_dir: Path | None = None,
     experiment_name: str = "bess_simulation",
+    standby_power_kw: float = 0.0,
+    self_discharge_rate_per_month: float = 0.0,
 ) -> pd.DataFrame:
     """Run the standard scenarios for prepared data at each requested resolution."""
     timestamp = run_timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -45,7 +47,11 @@ def run_bess_simulation(
     if not analysis_by_resolution:
         raise ValueError("At least one resolution must be provided.")
 
-    batteries = make_standard_batteries(capacities)
+    batteries = make_standard_batteries(
+        capacities,
+        standby_power_kw=standby_power_kw,
+        self_discharge_rate_per_month=self_discharge_rate_per_month,
+    )
     scenarios = make_standard_scenarios(terminal_value_window_hours)
     audit_export = create_audit_export_config(dispatch_dir)
     result_frames: list[pd.DataFrame] = []
@@ -119,6 +125,21 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_CAPACITIES_KWH,
         help="Battery capacities to simulate in kWh (default: 1000).",
     )
+    parser.add_argument(
+        "--standby-power-kw",
+        type=float,
+        default=0.0,
+        help="Constant BESS standby demand in kW (default: 0).",
+    )
+    parser.add_argument(
+        "--self-discharge-rate-per-month",
+        type=float,
+        default=0.0,
+        help=(
+            "Monthly BESS self-discharge as a decimal fraction, "
+            "from 0 to <1 (default: 0)."
+        ),
+    )
     parser.add_argument("--start", help="UTC start timestamp, inclusive.")
     parser.add_argument("--end", help="UTC end timestamp, exclusive.")
     parser.add_argument(
@@ -175,6 +196,8 @@ def _run_from_args(args: argparse.Namespace) -> None:
         terminal_value_window_hours=terminal_value_window_hours,
         dispatch_dir=args.dispatch_dir,
         experiment_name="bess_simulation",
+        standby_power_kw=args.standby_power_kw,
+        self_discharge_rate_per_month=args.self_discharge_rate_per_month,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(args.output, index=False)

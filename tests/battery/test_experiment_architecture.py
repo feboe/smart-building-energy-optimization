@@ -162,6 +162,8 @@ def test_general_cli_defaults_to_15_minute_resolution(monkeypatch) -> None:
     assert general_args.resolutions == ["15min"]
     assert general_args.days == 7
     assert general_args.terminal_value_window_hours == 4.0
+    assert general_args.standby_power_kw == 0.0
+    assert general_args.self_discharge_rate_per_month == 0.0
 
 
 def test_terminal_value_setting_reaches_all_scenarios() -> None:
@@ -214,3 +216,41 @@ def test_general_cli_forwards_terminal_value_configuration(
 
     assert captured["terminal_value_window_hours"] == expected_terminal_value
     assert set(captured["analysis_by_resolution"]) == {"15min"}
+
+
+def test_general_cli_forwards_passive_loss_configuration(
+    make_analysis_df,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    analysis_df = _short_analysis(make_analysis_df)
+    captured = {}
+
+    def fake_runner(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame({"result": [1]})
+
+    monkeypatch.setattr(
+        simulation_cli, "load_smart_company_analysis", lambda **_: analysis_df
+    )
+    monkeypatch.setattr(simulation_cli, "run_bess_simulation", fake_runner)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "runner",
+            "--days",
+            "1",
+            "--standby-power-kw",
+            "5",
+            "--self-discharge-rate-per-month",
+            "0.01",
+            "--output",
+            str(tmp_path / "summary.csv"),
+        ],
+    )
+
+    simulation_cli.main()
+
+    assert captured["standby_power_kw"] == 5.0
+    assert captured["self_discharge_rate_per_month"] == 0.01

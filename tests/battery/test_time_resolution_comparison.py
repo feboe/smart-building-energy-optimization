@@ -1,5 +1,9 @@
 """Integration checks for direct multi-resolution BESS simulations."""
 
+import math
+
+import pytest
+
 from scripts.battery.run_bess_simulation import run_bess_simulation, select_time_window
 
 
@@ -107,3 +111,48 @@ def test_select_time_window_uses_a_common_half_open_period(make_analysis_df) -> 
 
     assert len(selected_df) == 3
     assert selected_df["observation_timestamp"].iloc[0].hour == 2
+
+
+def test_runner_includes_configured_passive_losses_in_bess_summaries(
+    make_analysis_df,
+) -> None:
+    analysis_df = make_analysis_df([{"total_w": 1_000.0}])
+
+    result_df = run_bess_simulation(
+        {"hour": analysis_df},
+        capacities_kwh=[1000],
+        standby_power_kw=5.0,
+        self_discharge_rate_per_month=0.01,
+        run_timestamp="2021-01-01T00:00:00+00:00",
+        max_workers=1,
+    )
+
+    bess_rows = result_df[result_df["method"] != "baseline"]
+    baseline_rows = result_df[result_df["method"] == "baseline"]
+    assert set(bess_rows["standby_power_kw"]) == {5.0}
+    assert set(bess_rows["self_discharge_rate_per_month"]) == {0.01}
+    assert set(bess_rows["bess_standby_consumption_kwh"]) == {5.0}
+    assert set(baseline_rows["standby_power_kw"]) == {0.0}
+    assert set(baseline_rows["self_discharge_rate_per_month"]) == {0.0}
+    assert set(baseline_rows["bess_standby_consumption_kwh"]) == {0.0}
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"standby_power_kw": -0.01}, "standby_power_kw"),
+        ({"standby_power_kw": math.inf}, "standby_power_kw"),
+        ({"standby_power_kw": math.nan}, "standby_power_kw"),
+        ({"self_discharge_rate_per_month": -0.01}, "self_discharge_rate_per_month"),
+        ({"self_discharge_rate_per_month": math.inf}, "self_discharge_rate_per_month"),
+        ({"self_discharge_rate_per_month": math.nan}, "self_discharge_rate_per_month"),
+        ({"self_discharge_rate_per_month": 1.0}, "self_discharge_rate_per_month"),
+    ],
+)
+def test_runner_rejects_invalid_passive_loss_configuration(
+    make_analysis_df, kwargs, message
+) -> None:
+    analysis_df = make_analysis_df([{}])
+
+    with pytest.raises(ValueError, match=message):
+        run_bess_simulation({"hour": analysis_df}, max_workers=1, **kwargs)
