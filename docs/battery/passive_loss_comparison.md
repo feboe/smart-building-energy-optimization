@@ -18,6 +18,8 @@ Both runs use the complete 2021 dataset with 35,040 15-minute intervals. They
 share a 1,000 kWh battery, 500 kW charge and discharge limits, a 24-hour rolling
 horizon, a four-hour terminal-value window, identical tariffs, 95% directional
 efficiencies, and 10% minimum SOC.
+Both use a single grid connection point that disallows simultaneous import and
+export.
 
 The comparison run adds:
 
@@ -36,15 +38,15 @@ operating case and both runs start and finish at 100 kWh SOC.
 
 | Dynamic grid-charging LP | Without passive losses | With passive losses | Change |
 | --- | ---: | ---: | ---: |
-| Operational savings | 14,189.07 EUR | 9,702.37 EUR | -4,486.70 EUR |
-| Grid import | 1,188,175.44 kWh | 1,208,911.78 kWh | +20,736.34 kWh |
-| Grid export | 29,102.01 kWh | 27,907.72 kWh | -1,194.29 kWh |
-| Approximate full cycles | 176.62 | 176.53 | -0.08 |
+| Operational savings | 14,142.60 EUR | 9,654.12 EUR | -4,488.48 EUR |
+| Grid import | 1,185,831.97 kWh | 1,206,625.37 kWh | +20,793.40 kWh |
+| Grid export | 26,849.75 kWh | 25,729.05 kWh | -1,120.70 kWh |
+| Approximate full cycles | 175.77 | 175.54 | -0.24 |
 | Peak grid import | approximately 500 kW | approximately 500 kW | unchanged |
 | Auxiliary consumption | 0 kWh | 21,900 kWh | +21,900 kWh |
-| Self-discharge loss | 0 kWh | 37.80 kWh | +37.80 kWh |
+| Self-discharge loss | 0 kWh | 37.62 kWh | +37.62 kWh |
 
-Under these assumptions, annual operational savings fall by 31.6%. The battery
+Under these assumptions, annual operational savings fall by 31.7%. The battery
 continues to follow a very similar dispatch pattern: equivalent cycles and the
 grid-import peak barely change.
 
@@ -56,7 +58,7 @@ self-discharge loss in the main LP case. Part of that load is covered by local
 generation, which explains why grid import rises by less than 21.9 MWh while
 grid export also declines.
 
-The result does not show that every 1,000 kWh BESS loses exactly 31.6% of its
+The result does not show that every 1,000 kWh BESS loses exactly 31.7% of its
 operating value. It shows that auxiliary consumption can materially change an
 economic assessment even when the optimized dispatch and cycle count remain
 nearly unchanged.

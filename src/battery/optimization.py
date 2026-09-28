@@ -184,7 +184,7 @@ def _solve_horizon(
             <= battery.max_charge_power_kw * timestep_hours
         ), f"charge_power_limit_{step}"
 
-        if allow_grid_charging:
+        if allow_grid_charging and available_surplus_kwh <= 0:
             grid_charge_limit = _grid_connection_charge_limit_kwh(
                 remaining_deficit_kwh=demand_after_generation_kwh,
                 scenario=scenario,

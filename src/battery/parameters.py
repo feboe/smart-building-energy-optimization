@@ -7,7 +7,7 @@ from numbers import Real
 FIXED_SURPLUS_ONLY = "fixed_surplus_only"
 DYNAMIC_SURPLUS_ONLY = "dynamic_surplus_only"
 DYNAMIC_SURPLUS_GRID_CHARGING = "dynamic_surplus_grid_charging"
-BESS_MODEL_VERSION = "2.0"
+BESS_MODEL_VERSION = "2.1"
 
 VALID_DISPATCH_STRATEGIES = {
     FIXED_SURPLUS_ONLY,
@@ -119,6 +119,22 @@ class ScenarioParameters:
                 "dispatch_strategy must be one of "
                 f"{sorted(VALID_DISPATCH_STRATEGIES)}."
             )
+        _validate_price_parameter(
+            self.import_markup_eur_per_kwh,
+            "import_markup_eur_per_kwh",
+            nonnegative=False,
+        )
+        _validate_price_parameter(
+            self.export_price_eur_per_kwh,
+            "export_price_eur_per_kwh",
+            nonnegative=True,
+        )
+        if self.fixed_import_price_eur_per_kwh is not None:
+            _validate_price_parameter(
+                self.fixed_import_price_eur_per_kwh,
+                "fixed_import_price_eur_per_kwh",
+                nonnegative=True,
+            )
         if not math.isfinite(self.horizon_hours) or self.horizon_hours <= 0:
             raise ValueError("horizon_hours must be greater than zero.")
         if not 0 <= self.low_price_quantile <= 1:
@@ -152,3 +168,20 @@ class ScenarioParameters:
                 raise ValueError(
                     "terminal_value_window_hours must not exceed horizon_hours."
                 )
+
+
+def _validate_price_parameter(
+    value: float,
+    name: str,
+    *,
+    nonnegative: bool,
+) -> None:
+    """Validate a scenario price parameter without coercing caller input."""
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, Real)
+        or not math.isfinite(value)
+        or (nonnegative and value < 0)
+    ):
+        requirement = "finite and non-negative" if nonnegative else "finite"
+        raise ValueError(f"{name} must be {requirement}.")

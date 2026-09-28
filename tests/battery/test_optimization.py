@@ -174,6 +174,38 @@ def test_dynamic_grid_charging_uses_low_price_charge_and_high_price_discharge(
     assert dispatch_df.loc[1, "discharge_to_load_kwh"] > 0
 
 
+def test_dynamic_grid_charging_does_not_import_while_exporting_local_surplus(
+    make_analysis_df,
+) -> None:
+    battery = _make_exact_battery()
+    analysis_df = make_analysis_df(
+        [
+            {
+                "total_w": -100_000,
+                "pv_w": -200_000,
+                "day_ahead_price_eur_per_kwh": 0.05,
+            },
+            {"total_w": 100_000, "day_ahead_price_eur_per_kwh": 0.07},
+        ]
+    )
+
+    dispatch_df = run_optimized_dispatch(
+        analysis_df,
+        battery,
+        make_dynamic_surplus_and_grid_charging_scenario(
+            export_price_eur_per_kwh=0.08,
+            horizon_hours=2,
+            grid_connection_limit_kw=200,
+            surplus_reserve_fraction=0.0,
+        ),
+    )
+
+    assert dispatch_df.loc[0, "charge_from_grid_kwh"] == pytest.approx(0.0)
+    assert dispatch_df.loc[0, "grid_import_kwh"] == pytest.approx(0.0)
+    assert dispatch_df.loc[0, "grid_export_kwh"] > 0
+    validate_dispatch_results(dispatch_df, battery)
+
+
 def test_dynamic_grid_charging_optimizer_charges_then_discharges_without_recharge(
     make_analysis_df,
 ) -> None:

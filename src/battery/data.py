@@ -186,6 +186,7 @@ def prepare_simulation_data(
     prepared_df["dynamic_import_price_eur_per_kwh"] = (
         prepared_df["day_ahead_price_eur_per_kwh"] + scenario.import_markup_eur_per_kwh
     )
+    _validate_effective_import_prices(prepared_df)
     prepared_df["available_surplus_kwh"] = (
         prepared_df["local_generation_kwh"] - prepared_df["gross_load_kwh"]
     ).clip(lower=0)
@@ -194,6 +195,18 @@ def prepare_simulation_data(
     ).clip(lower=0)
 
     return prepared_df
+
+
+def _validate_effective_import_prices(prepared_df: pd.DataFrame) -> None:
+    """Reject price inputs outside the supported non-negative LP contract."""
+    effective_prices = prepared_df["dynamic_import_price_eur_per_kwh"]
+    if (~effective_prices.map(math.isfinite)).any():
+        raise ValueError("Effective import prices must be finite.")
+    if (effective_prices < 0).any():
+        raise ValueError(
+            "Negative effective import prices are not supported by the BESS model. "
+            "Increase import_markup_eur_per_kwh or use non-negative day-ahead prices."
+        )
 
 
 def prepare_bess_simulation_data(

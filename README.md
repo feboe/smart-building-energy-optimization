@@ -27,10 +27,11 @@ production EMS software.
 ![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/battery/assets/strategy_comparison_1000kwh.png)
 
 - The site already self-consumes about `92%` of local PV and CHP generation.
-- The best tested `1000 kWh` case saves about `13.4k EUR/year` in simulated
-  operating cost.
-- In dynamic grid-charging operation, the LP adds about `4.0k EUR/year` over
-  the heuristic by scheduling energy for more valuable discharge hours.
+- The hourly `1000 kWh` capacity study saves about `13.4k EUR/year`; retaining
+  quarter-hour behavior raises the corresponding estimate to `14.1k EUR/year`.
+- In hourly dynamic grid-charging operation, the 24-hour perfect-foresight LP
+  adds about `4.0k EUR/year` over the heuristic. It is an optimization benchmark,
+  not an expected production-EMS uplift.
 - Larger batteries increase total savings and surplus capture, but show
   diminishing marginal value and fewer equivalent cycles per installed kWh.
 

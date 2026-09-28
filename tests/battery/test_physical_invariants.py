@@ -289,6 +289,17 @@ def test_validate_dispatch_results_rejects_simultaneous_charge_and_discharge(
         validate_dispatch_results(dispatch_df, battery)
 
 
+def test_validate_dispatch_results_rejects_simultaneous_grid_import_and_export(
+    make_analysis_df,
+) -> None:
+    battery, dispatch_df = _make_valid_dispatch(make_analysis_df)
+    dispatch_df.loc[0, "grid_import_kwh"] = 1.0
+    dispatch_df.loc[0, "grid_export_kwh"] = 1.0
+
+    with pytest.raises(ValueError, match="imports and exports"):
+        validate_dispatch_results(dispatch_df, battery)
+
+
 def test_validate_dispatch_results_rejects_export_not_leftover_surplus(
     make_analysis_df,
 ) -> None:

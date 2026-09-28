@@ -70,6 +70,31 @@ def test_prepare_simulation_data_applies_import_markup(make_analysis_df) -> None
     assert prepared_df.loc[0, "dynamic_import_price_eur_per_kwh"] == pytest.approx(0.15)
 
 
+def test_prepare_simulation_data_allows_negative_raw_price_with_markup(
+    make_analysis_df,
+) -> None:
+    analysis_df = make_analysis_df(
+        [{"total_w": 100_000, "day_ahead_price_eur_per_kwh": -0.05}]
+    )
+    scenario = make_fixed_surplus_only_scenario(import_markup_eur_per_kwh=0.05)
+
+    prepared_df = prepare_simulation_data(analysis_df, scenario)
+
+    assert prepared_df.loc[0, "dynamic_import_price_eur_per_kwh"] == pytest.approx(0.0)
+
+
+def test_prepare_simulation_data_rejects_negative_effective_import_price(
+    make_analysis_df,
+) -> None:
+    analysis_df = make_analysis_df(
+        [{"total_w": 100_000, "day_ahead_price_eur_per_kwh": -0.05}]
+    )
+    scenario = make_fixed_surplus_only_scenario(import_markup_eur_per_kwh=0.04)
+
+    with pytest.raises(ValueError, match="Negative effective import prices"):
+        prepare_simulation_data(analysis_df, scenario)
+
+
 def test_prepare_simulation_data_scales_energy_by_timestep(make_analysis_df) -> None:
     analysis_df = make_analysis_df(
         [

@@ -31,6 +31,7 @@ day-ahead price data from 2021.
 | Export price | 0.08 EUR/kWh |
 | Degradation proxy | 0.03 EUR/discharged kWh |
 | Grid-charging connection limit | 500 kW |
+| Grid metering | Single connection point; no simultaneous import/export |
 
 The comparison includes:
 
@@ -69,12 +70,12 @@ strategies.
 
 | Method | Scenario | Annual operational savings | Surplus captured | Equivalent cycles | Runtime |
 |---|---|---:|---:|---:|---:|
-| Heuristic | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 0.6 s |
-| LP | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 9.3 min |
-| Heuristic | Dynamic surplus-only | 5.8k EUR | 67.5% | 62.4 | 5.3 s |
-| LP | Dynamic surplus-only | 6.5k EUR | 74.7% | 69.1 | 9.4 min |
-| Heuristic | Dynamic grid-charging | 9.4k EUR | 66.1% | 200.6 | 7.8 s |
-| LP | Dynamic grid-charging | 13.4k EUR | 72.2% | 171.3 | 10.0 min |
+| Heuristic | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 0.9 s |
+| LP | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 2.3 min |
+| Heuristic | Dynamic surplus-only | 5.8k EUR | 67.5% | 62.4 | 8.3 s |
+| LP | Dynamic surplus-only | 6.6k EUR | 74.8% | 69.2 | 2.5 min |
+| Heuristic | Dynamic grid-charging | 9.4k EUR | 66.1% | 200.6 | 8.7 s |
+| LP | Dynamic grid-charging | 13.4k EUR | 74.6% | 169.1 | 2.5 min |
 
 All savings exclude BESS investment cost.
 
@@ -102,7 +103,7 @@ average price is not sufficient for good arbitrage.
 | Method | Average grid-charge price | Average discharge-hour price | Adjusted spread |
 |---|---:|---:|---:|
 | Heuristic | 0.185 EUR/kWh | 0.248 EUR/kWh | 0.012 EUR/kWh |
-| LP | 0.205 EUR/kWh | 0.282 EUR/kWh | 0.024 EUR/kWh |
+| LP | 0.209 EUR/kWh | 0.282 EUR/kWh | 0.021 EUR/kWh |
 
 The heuristic grid-charges only when the current price falls below the rolling
 20th-percentile threshold, so it purchases energy at a lower average price.
@@ -112,7 +113,7 @@ moderate compared with a more expensive hour later in the horizon.
 
 The LP sometimes accepts a higher charging price because it can see that the
 stored energy will displace substantially more expensive imports later. It also
-cycles less: about `171` equivalent cycles instead of `201` for the heuristic.
+cycles less: about `169` equivalent cycles instead of `201` for the heuristic.
 The resulting charge-discharge timing is more selective and produces roughly
 twice the efficiency- and degradation-adjusted price spread.
 
@@ -129,9 +130,9 @@ operating savings at every tested capacity.
 | Capacity | Annual operational savings | Additional savings | Marginal value of added capacity |
 |---:|---:|---:|---:|
 | 250 kWh | 5.1k EUR | - | - |
-| 500 kWh | 8.7k EUR | 3.6k EUR | 14.3 EUR/kWh-year |
+| 500 kWh | 8.6k EUR | 3.6k EUR | 14.2 EUR/kWh-year |
 | 1000 kWh | 13.4k EUR | 4.7k EUR | 9.4 EUR/kWh-year |
-| 2000 kWh | 17.8k EUR | 4.4k EUR | 4.4 EUR/kWh-year |
+| 2000 kWh | 17.9k EUR | 4.5k EUR | 4.5 EUR/kWh-year |
 
 Total savings continue to increase, but the value of each additional installed
 kWh declines sharply. Moving from `1000` to `2000 kWh` adds twice as much
@@ -147,8 +148,8 @@ project lifetime.
 ![Surplus capture and equivalent cycles by battery capacity](assets/capacity_utilization.png)
 
 For LP dynamic grid charging, increasing capacity raises the share of local
-surplus captured from `31%` at `250 kWh` to `85%` at `2000 kWh`. At the same
-time, equivalent annual cycles fall from about `244` to `118`.
+surplus captured from `32%` at `250 kWh` to `88%` at `2000 kWh`. At the same
+time, equivalent annual cycles fall from about `243` to `114`.
 
 This combination explains the diminishing returns:
 
@@ -193,11 +194,12 @@ Annual metrics aggregate all 8,760 simulated hours.
 
 ## Runtime Tradeoff
 
-The heuristic completes a full annual scenario in approximately `0.6-7.8`
+The heuristic completes a full annual scenario in approximately `0.9-8.7`
 seconds, depending on whether price thresholds and future-surplus calculations
 are required.
 
-The LP takes approximately `9.3-10.0` minutes per annual capacity/scenario run.
+In the reported 12-worker rerun, each hourly LP job took approximately
+`2.3-2.5` minutes.
 The model itself is small, but rolling hourly control builds and solves a new LP
 for every one of the 8,760 simulation hours. Parallel experiment execution
 reduces total wall-clock time across independent runs, but it does not reduce
@@ -218,6 +220,8 @@ The generated experiment results therefore satisfy the modeled constraints:
 - charging never exceeds available surplus or connection headroom
 - discharge never exceeds remaining local demand
 - no simultaneous charging and discharging appears in the final dispatch
+- no simultaneous grid import and export appears in the final dispatch
+- effective import and export prices are non-negative
 - hourly energy and SOC balances remain consistent
 
 The dynamic grid-charging cases also respect the `500 kW` limit for additional
@@ -233,6 +237,8 @@ building demand and is not a complete point-of-connection model.
 - Demand charges and an explicit peak-shaving objective are excluded.
 - Forecast error and real-time command correction are excluded.
 - Stored battery energy cannot be exported to the grid.
+- Negative effective import and export prices are outside the supported model
+  contract; curtailment and negative-price operating modes are not modeled.
 - The grid limit constrains extra battery charging, not all import/export flows.
 - The current model uses an optional terminal SOC value derived from the final
   four known hours of each rolling horizon; this remains an economic scenario

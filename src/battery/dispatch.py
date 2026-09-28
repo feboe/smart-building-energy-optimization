@@ -256,6 +256,12 @@ def validate_dispatch_results(
     if simultaneous_charge_discharge.any():
         raise ValueError("Battery charges and discharges in the same timestep.")
 
+    simultaneous_grid_import_export = (
+        dispatch_df["grid_import_kwh"] > tolerance
+    ) & (dispatch_df["grid_export_kwh"] > tolerance)
+    if simultaneous_grid_import_export.any():
+        raise ValueError("Grid imports and exports in the same timestep.")
+
     export_balance_error = (
         dispatch_df["grid_export_kwh"]
         - dispatch_df["available_surplus_kwh"]

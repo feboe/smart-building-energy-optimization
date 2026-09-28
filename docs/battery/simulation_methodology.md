@@ -74,6 +74,25 @@ strategies. They should be read as 2021-style portfolio assumptions, not as a
 site-specific tariff model, EEG settlement model, or full battery lifetime-cost
 calculation.
 
+## Price and Metering Contract
+
+The simulation supports only non-negative effective import prices and
+non-negative export prices. The effective import price is the day-ahead price
+after applying the configured markup; a negative raw day-ahead price is valid
+when the markup makes the effective price zero or higher. A configured fixed
+import price must also be non-negative. Negative prices are rejected before a
+controller, optimizer, or metric calculation runs because this LP has no
+operating-mode variables to prevent artificial loss-making charge/discharge
+cycles under negative import prices. Negative export prices are excluded
+because the model has no curtailment variable for local generation.
+
+The site is represented as having one common grid connection point, rather
+than independent gross import and export meters. In an interval with local
+surplus, that surplus is first available for battery charging and the
+remainder is exported; the grid is not used to charge the battery in that same
+interval. The shared dispatch validator rejects output that contains both grid
+import and grid export above its numerical tolerance in one interval.
+
 ## Battery Model
 
 The battery is modeled with a small set of physical assumptions:

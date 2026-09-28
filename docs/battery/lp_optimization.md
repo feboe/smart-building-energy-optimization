@@ -187,6 +187,30 @@ Here $P^{grid}$ is the grid connection limit. The model does not shed natural
 building demand if $l_t$ is already above the limit. It only prevents extra
 battery charging from increasing import further.
 
+## Price and Metering Contract
+
+The LP accepts only non-negative effective import prices and non-negative
+export prices. Effective import price means the day-ahead price plus the
+configured import markup, so a negative day-ahead value remains valid when the
+markup brings the effective price to zero or above. A negative effective import
+price is rejected before the LP is created. Supporting it
+would require explicit operating modes to prevent the LP from consuming energy
+through artificial charge/discharge losses. Negative export prices are also
+unsupported because local generation cannot be curtailed.
+
+The formulation represents one common grid connection point. For every
+interval with local surplus, grid battery charging is constrained to zero:
+
+$$
+a_t > 0 \Rightarrow c^{grid}_t = 0
+$$
+
+The battery can still charge from local surplus, and residual surplus is
+exported. This prevents concurrent grid import and export that would otherwise
+be possible with separate gross-meter accounting. The shared result validator
+also rejects any final dispatch with import and export both above numerical
+tolerance in the same interval.
+
 ## Why This Is an LP
 
 All decision variables are continuous energy quantities. That is natural for an
