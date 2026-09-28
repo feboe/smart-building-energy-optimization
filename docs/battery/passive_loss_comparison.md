@@ -1,35 +1,22 @@
 # BESS Passive-Loss Comparison
 
-This experiment measures how an always-on auxiliary load and passive battery
-self-discharge change the simulated operating value of the BESS. It compares
-the established loss-free model with an otherwise identical passive-loss run.
-
-## Loss Model
-
-The auxiliary load is modeled as additional AC-side site demand. Local PV and
-CHP generation serve it first; any remaining demand can be supplied by the
-battery or grid. Self-discharge reduces usable SOC before each dispatch
-decision and is scaled from a 30-day monthly rate to the interval duration.
-Charge and discharge efficiencies remain separate throughput-dependent losses.
+This experiment compares the standard loss-free run with an otherwise
+identical run that adds AC-side auxiliary demand and passive self-discharge.
+Their implementation is defined in the shared [battery
+model](simulation_methodology.md#battery-model).
 
 ## Experiment Setup
 
-Both runs use the complete 2021 dataset with 35,040 15-minute intervals. They
-share a 1,000 kWh battery, 500 kW charge and discharge limits, a 24-hour rolling
-horizon, a four-hour terminal-value window, identical tariffs, 95% directional
-efficiencies, and 10% minimum SOC.
-Both use a single grid connection point that disallows simultaneous import and
-export.
-
-The comparison run adds:
+Both runs use the shared methodology and the same 2021 15-minute, `1000 kWh`
+dynamic grid-charging LP setup. The comparison run adds:
 
 | Passive-loss assumption | Value |
 | --- | ---: |
 | Constant auxiliary power | 2.5 kW |
 | Self-discharge | 1% per 30-day month |
 
-The 2.5 kW auxiliary load is a transparent sensitivity assumption, not a
-measured site value or a claim about a specific product.
+The `2.5 kW` auxiliary load is a sensitivity assumption, not a measured site or
+product value.
 
 ## Annual Result
 
@@ -63,11 +50,10 @@ operating value. It shows that auxiliary consumption can materially change an
 economic assessment even when the optimized dispatch and cycle count remain
 nearly unchanged.
 
-## Limitations
+## Assumption Boundary
 
-- Auxiliary power is constant rather than temperature- or state-dependent.
-- The 2.5 kW assumption is generic and should be replaced with product and site
-  data for an investment assessment.
-- Self-discharge is modeled as a constant monthly rate above minimum SOC.
-- Savings exclude purchase, installation, financing, maintenance, and battery
-  replacement costs.
+Auxiliary power is constant rather than temperature- or state-dependent, and
+self-discharge is a constant monthly rate above minimum SOC. Product and site
+data should replace both sensitivity assumptions in an investment assessment;
+the shared [scope limitations](simulation_methodology.md#scope-and-limitations)
+continue to apply.

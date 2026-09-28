@@ -4,42 +4,43 @@ The LP optimizer is the mathematical benchmark for the BESS dispatch problem.
 It uses the same physical battery assumptions as the heuristic, but replaces
 rule-based decisions with an explicit cost-minimization problem.
 
-The model is not intended to be a full production EMS. It is a compact linear
-program that shows how battery dispatch can be formulated mathematically for
-dynamic electricity prices.
+Shared inputs, physical assumptions, validation rules, and limitations are
+defined in the [simulation methodology](simulation_methodology.md). This page
+covers only the LP formulation and optimizer-specific choices.
 
 ## Rolling Horizon
 
-The optimizer uses a rolling horizon. At each simulation hour, it:
+The optimizer uses a rolling horizon. At each simulation interval, it:
 
 1. reads the current battery SOC
-2. builds an optimization problem for the next horizon, usually 24 hours
+2. builds an optimization problem for the next horizon, usually 24 real hours
 3. solves the horizon with perfect foresight
-4. executes only the first-hour decision
-5. updates SOC and moves to the next hour
+4. executes only the first-interval decision
+5. updates SOC and moves to the next interval
 
 This is similar in spirit to model predictive control. The model can see the
 future inside the horizon, but it does not commit to the full future plan. It
-re-optimizes every hour.
+re-optimizes every interval.
 
 Near the end of the dataset, the horizon is allowed to be shorter than the
 configured horizon length.
 
 ## Notation
 
-Let $t \in T$ index the hours in one optimization horizon.
+Let $t \in T$ index the intervals in one optimization horizon.
 
 Input parameters:
 
-- $l_t$: demand after local generation in hour $t$
-- $a_t$: available local surplus in hour $t$
+- $l_t$: demand after local generation in interval $t$
+- $a_t$: available local surplus in interval $t$
 - $p_t$: dynamic import price in EUR/kWh
 - $p^{exp}$: export price in EUR/kWh
 - $c^{deg}$: degradation cost per discharged kWh
 - $\eta^{ch}$: charge efficiency
 - $\eta^{dis}$: discharge efficiency
-- $P^{ch}$: maximum battery charge power per hour
-- $P^{dis}$: maximum battery discharge power per hour
+- $P^{ch}$ and $P^{dis}$: maximum charge and discharge power in kW
+- $\Delta t_t$: duration of interval $t$ in hours
+- $\rho_t$: passive SOC retention over interval $t$
 - $S^{min}$ and $S^{max}$: minimum and maximum SOC
 - $S_0$: SOC at the start of the horizon
 
@@ -50,9 +51,9 @@ Decision variables:
 - $d_t$: discharge to local load
 - $g^{imp}_t$: grid import
 - $g^{exp}_t$: grid export
-- $s_t$: battery SOC at the end of hour $t$
+- $s_t$: battery SOC at the end of interval $t$
 
-All flow variables are nonnegative.
+All flow variables are nonnegative interval energy in kWh.
 
 ## Objective Function
 
@@ -71,7 +72,7 @@ The first term is grid import cost. The second term subtracts export revenue.
 The third term adds the simple degradation proxy for discharged battery energy.
 
 For the fixed-price scenario, $p_t$ is replaced by the fixed import price. For
-dynamic scenarios, $p_t$ is the hourly dynamic import price.
+dynamic scenarios, $p_t$ is the dynamic import price for the interval.
 
 ## Terminal Energy Value
 
@@ -140,27 +141,29 @@ $$
 0 \le d_t \le l_t
 $$
 
-Charge and discharge are limited by battery power:
+Charge and discharge energy are limited by power times interval duration:
 
 $$
-c^{sur}_t + c^{grid}_t \le P^{ch}
+c^{sur}_t + c^{grid}_t \le P^{ch}\Delta t_t
 $$
 
 $$
-d_t \le P^{dis}
+d_t \le P^{dis}\Delta t_t
 $$
 
 SOC evolves with charge and discharge efficiency:
 
 $$
 s_t =
-s_{t-1}
+\rho_t s_{t-1}
++ (1-\rho_t)S^{min}
 + \eta^{ch}(c^{sur}_t + c^{grid}_t)
 - \frac{d_t}{\eta^{dis}}
 $$
 
-For the first hour of the horizon, $s_{t-1}$ is the current simulation SOC
-$S_0$.
+Here $\rho_t=(1-r)^{\Delta t_t/720}$ for monthly self-discharge rate $r$; the
+retention loss applies only above minimum SOC. For the first interval,
+$s_{t-1}$ is the current simulation SOC $S_0$.
 
 SOC must stay within the battery limits:
 
@@ -180,42 +183,33 @@ In the dynamic grid-charging scenario, grid charging is allowed but capped by
 the spare grid connection capacity after natural building demand:
 
 $$
-0 \le c^{grid}_t \le \max(P^{grid} - l_t, 0)
+0 \le c^{grid}_t \le \max(P^{grid}\Delta t_t - l_t, 0)
 $$
 
 Here $P^{grid}$ is the grid connection limit. The model does not shed natural
 building demand if $l_t$ is already above the limit. It only prevents extra
 battery charging from increasing import further.
 
-## Price and Metering Contract
+## Single-Metering-Point Constraint
 
-The LP accepts only non-negative effective import prices and non-negative
-export prices. Effective import price means the day-ahead price plus the
-configured import markup, so a negative day-ahead value remains valid when the
-markup brings the effective price to zero or above. A negative effective import
-price is rejected before the LP is created. Supporting it
-would require explicit operating modes to prevent the LP from consuming energy
-through artificial charge/discharge losses. Negative export prices are also
-unsupported because local generation cannot be curtailed.
-
-The formulation represents one common grid connection point. For every
-interval with local surplus, grid battery charging is constrained to zero:
+The shared [price and metering
+contract](simulation_methodology.md#price-and-metering-contract) represents one
+grid connection point. The LP implements that contract by disabling grid
+charging whenever local surplus is present:
 
 $$
 a_t > 0 \Rightarrow c^{grid}_t = 0
 $$
 
-The battery can still charge from local surplus, and residual surplus is
-exported. This prevents concurrent grid import and export that would otherwise
-be possible with separate gross-meter accounting. The shared result validator
-also rejects any final dispatch with import and export both above numerical
-tolerance in the same interval.
+Local-surplus charging remains available and residual surplus is exported.
+Input-price validation and final dispatch validation are shared with the other
+controllers and are therefore documented in the methodology rather than
+repeated here.
 
 ## Why This Is an LP
 
-All decision variables are continuous energy quantities. That is natural for an
-hourly battery model: a battery can charge 12.4 kWh or discharge 3.7 kWh in an
-hour.
+All decision variables are continuous interval-energy quantities: a battery can
+charge 12.4 kWh or discharge 3.7 kWh in one interval.
 
 The model does not include a binary charge/discharge mode variable. Adding that
 would turn the problem into a mixed-integer linear program (MILP). A MILP could
@@ -236,7 +230,7 @@ The LP optimizer is best understood as a benchmark:
 - it makes decisions with an explicit objective
 - it can trade off surplus capture, price arbitrage, degradation, and SOC
   constraints
-- it is still simplified by perfect foresight and hourly resolution
+- it is still simplified by perfect foresight and the shared model scope
 
 This makes it suitable for comparing rule-based EMS behavior against a
 mathematical optimization approach in a clear portfolio project.

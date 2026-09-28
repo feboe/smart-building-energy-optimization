@@ -14,21 +14,25 @@ dynamic electricity prices.
 
 The heuristic controller is described in
 [`heuristic_dispatch.md`](heuristic_dispatch.md). The linear optimization model
-is described in [`lp_optimization.md`](lp_optimization.md).
+is described in [`lp_optimization.md`](lp_optimization.md). All battery
+experiments inherit the conventions, price and metering rules, dispatch
+contract, metrics, and limitations in this document unless a comparison page
+explicitly states a deviation.
 
 ## Energy Convention
 
-The simulation uses hourly energy values. Power values from the analysis data
-are converted to kWh per hour.
+The simulation stores flows as energy per interval and supports hourly and
+15-minute data. Average power values from the analysis data are converted with
+the interval duration `timestep_hours`.
 
 The source data contains signed net grid power and signed local generation
 signals. The BESS model reconstructs a clean hourly energy balance from those
 signals:
 
 ```text
-grid_energy_kwh = total_w / 1000
-pv_generation_kwh = max(-pv_w / 1000, 0)
-chp_generation_kwh = max(-chp_w / 1000, 0)
+grid_energy_kwh = total_w / 1000 * timestep_hours
+pv_generation_kwh = max(-pv_w / 1000, 0) * timestep_hours
+chp_generation_kwh = max(-chp_w / 1000, 0) * timestep_hours
 local_generation_kwh = pv_generation_kwh + chp_generation_kwh
 gross_load_kwh = grid_energy_kwh + local_generation_kwh
 grid_import_kwh = max(grid_energy_kwh, 0)
@@ -45,9 +49,12 @@ The battery-facing quantities are:
 - `demand_after_generation_kwh`: load left after local generation
 - `dynamic_import_price_eur_per_kwh`: day-ahead price plus import markup
 
-This gives the dispatch algorithms a simple view of each hour: either there is
-local surplus to store/export, or there is remaining demand to serve from the
-battery/grid.
+This gives the dispatch algorithms a simple view of each interval: either there
+is local surplus to store/export, or there is remaining demand to serve from
+the battery/grid.
+
+The measured impact of retaining 15-minute rather than hourly behavior is
+reported in the [time-resolution comparison](time_resolution_comparison.md).
 
 ## Price Model
 
@@ -149,9 +156,9 @@ soc_end =
 Charge and discharge availability use SOC after passive loss. Efficiency losses
 remain throughput-dependent AC/SOC conversion losses; they are not counted
 again as standby or self-discharge. Standard experiment batteries keep both
-passive-loss inputs at zero for reproducibility; the separate passive-loss
-reference builder uses the sensitivity values of 5 kW standby and 1% monthly
-self-discharge.
+passive-loss inputs at zero for reproducibility. Nonzero sensitivity assumptions
+and their measured effect are documented in the [passive-loss
+comparison](passive_loss_comparison.md).
 
 The battery only discharges to serve local load. It does not export stored
 energy to the grid. Grid export is therefore only leftover local surplus after
@@ -237,6 +244,7 @@ The shared validator enforces the physical contract:
 - the battery cannot charge from more surplus than available
 - the battery cannot discharge more than remaining demand
 - no simultaneous charge and discharge appears in the final dispatch output
+- no simultaneous grid import and grid export appears in one interval
 - grid export equals leftover local surplus
 - interval energy and SOC balance are consistent, including BESS standby and
   passive self-discharge

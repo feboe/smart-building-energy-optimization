@@ -2,7 +2,8 @@
 
 This experiment isolates the effect of modeling the same electrical system at
 hourly and 15-minute resolution. Battery parameters, dispatch strategies,
-economic assumptions, and the 24-hour planning horizon remain unchanged.
+economic assumptions, and the 24-hour planning horizon remain unchanged and
+follow the shared [simulation methodology](simulation_methodology.md).
 
 The central result is that annual energy totals remain similar while grid
 peaks, short surplus periods, and simulated BESS value change materially.
@@ -15,8 +16,6 @@ peaks, short surplus periods, and simulated BESS value change materially.
 | Timestep | 1 h | 0.25 h |
 | Rolling horizon | 24 steps | 96 steps |
 | Battery energy / power | 1000 kWh / 500 kW | 1000 kWh / 500 kW |
-| Charge / discharge efficiency | 95% / 95% | 95% / 95% |
-| Grid metering | Single connection point | Single connection point |
 
 The source provides both measurement resolutions. Hourly day-ahead prices are
 assigned to all four 15-minute intervals of the corresponding hour. Dispatch
@@ -66,7 +65,7 @@ evaluated differently when the physical data retains quarter-hour behavior.
 15-minute model retains shorter peaks that are smoothed by a full-hour
 average. It still does not represent instantaneous second-level peaks.
 
-## Interpretation and Limitations
+## Interpretation
 
 - Hourly data is adequate for a first annual-energy estimate but less reliable
   for peak and dispatch questions.
@@ -74,9 +73,7 @@ average. It still does not represent instantaneous second-level peaks.
   two dynamic LP cases.
 - The 500 kW grid limit is a transparent scenario assumption, not a known site
   connection rating.
-- No real demand charge or site tariff is reconstructed. Economic results are
-  conditional scenario outcomes.
-- The LP uses perfect knowledge of the next 24 hours and therefore acts as an
-  optimization benchmark rather than a production EMS forecast.
-- Battery investment cost and a storage-sizing decision are outside this
-  experiment.
+
+The shared [scope limitations](simulation_methodology.md#scope-and-limitations)
+still apply; this comparison adds only the resolution-specific limitation that
+15-minute averages do not represent instantaneous peaks.

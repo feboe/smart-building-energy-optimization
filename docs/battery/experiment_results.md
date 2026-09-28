@@ -11,37 +11,19 @@ controller details are documented in
 [`heuristic_dispatch.md`](heuristic_dispatch.md) and
 [`lp_optimization.md`](lp_optimization.md).
 
-These results are simulated annual operating outcomes. They are not an
-investment recommendation and do not include battery purchase, installation,
-financing, maintenance, or replacement costs.
+These are simulated annual operating outcomes, not an investment assessment.
 
-## Experiment Setup
+## Result Basis
 
-The experiment uses one year of hourly building, local generation, and SMARD
-day-ahead price data from 2021.
+The main study uses the complete hourly 2021 dataset and tests `250`, `500`,
+`1000`, and `2000 kWh` batteries with heuristic and LP control. It covers fixed
+surplus-only, dynamic surplus-only, and dynamic grid-charging operation. Shared
+battery, tariff, metering, and validation assumptions are defined once in the
+[simulation methodology](simulation_methodology.md).
 
-| Parameter | Value |
-|---|---:|
-| Battery capacities | 250, 500, 1000, 2000 kWh |
-| C-rate | 0.5 |
-| Minimum / maximum SOC | 10% / 100% |
-| Charge / discharge efficiency | 95% / 95% |
-| LP and heuristic horizon | 24 hours |
-| Import-price markup | 0.115 EUR/kWh |
-| Export price | 0.08 EUR/kWh |
-| Degradation proxy | 0.03 EUR/discharged kWh |
-| Grid-charging connection limit | 500 kW |
-| Grid metering | Single connection point; no simultaneous import/export |
-
-The comparison includes:
-
-- a no-battery baseline
-- fixed-price surplus-only dispatch
-- dynamic-price surplus-only dispatch
-- dynamic-price surplus plus grid-charging dispatch
-
-Savings for the fixed-price scenario use the fixed-price no-battery baseline.
-Savings for both dynamic scenarios use the dynamic-price no-battery baseline.
+Savings are measured against the matching no-battery price case: fixed-price
+dispatch uses the fixed-price baseline, while both dynamic scenarios use the
+dynamic-price baseline.
 
 ## Baseline Site Characteristics
 
@@ -169,10 +151,8 @@ capture are more informative annual utilization metrics.
 ![Heuristic and LP dispatch during a selected 48-hour period](assets/dispatch_rollout_48h.png)
 
 The rollout shows the `1000 kWh` dynamic grid-charging case from October 6,
-2021 at 03:00 through October 8, 2021 at 02:00. The displayed window was
-selected reproducibly: candidate periods had to contain meaningful surplus,
-demand, grid charging, and battery discharge for both controllers, then were
-ranked by their 48-hour price range.
+2021 at 03:00 through October 8, 2021 at 02:00. The reproducibly selected window
+contains surplus, demand, grid charging, and discharge for both controllers.
 
 The panels show:
 
@@ -209,40 +189,16 @@ This is an important engineering tradeoff: the LP provides a useful optimality
 benchmark and better dynamic scheduling, while the heuristic is much cheaper
 to execute and easier to explain.
 
-## Feasibility Checks
+## Validation and Scope
 
-Both controller implementations pass the same physical dispatch validator.
-The generated experiment results therefore satisfy the modeled constraints:
-
-- charge, discharge, grid-import, and grid-export flows are nonnegative
-- SOC remains inside the configured minimum and maximum
-- charge and discharge power limits are respected
-- charging never exceeds available surplus or connection headroom
-- discharge never exceeds remaining local demand
-- no simultaneous charging and discharging appears in the final dispatch
-- no simultaneous grid import and export appears in the final dispatch
-- effective import and export prices are non-negative
-- hourly energy and SOC balances remain consistent
-
-The dynamic grid-charging cases also respect the `500 kW` limit for additional
-grid charging within solver tolerance. This limit does not curtail natural
-building demand and is not a complete point-of-connection model.
-
-## Limitations
-
-- The LP uses perfect foresight inside each rolling horizon.
-- The simulation uses hourly resolution and does not model quarter-hour peaks.
-- Battery degradation is represented by a simple discharged-throughput cost.
-- Battery capex, financing, maintenance, replacement, and payback are excluded.
-- Demand charges and an explicit peak-shaving objective are excluded.
-- Forecast error and real-time command correction are excluded.
-- Stored battery energy cannot be exported to the grid.
-- Negative effective import and export prices are outside the supported model
-  contract; curtailment and negative-price operating modes are not modeled.
-- The grid limit constrains extra battery charging, not all import/export flows.
-- The current model uses an optional terminal SOC value derived from the final
-  four known hours of each rolling horizon; this remains an economic scenario
-  assumption rather than an observed post-horizon price.
+All reported runs pass the shared physical dispatch validator. The enforced
+energy balances, SOC and power limits, price and metering rules, and full scope
+limitations are documented in the [simulation
+methodology](simulation_methodology.md#dispatch-contract). The separate
+[time-resolution comparison](time_resolution_comparison.md), [terminal-value
+comparison](terminal_value_comparison.md), and [passive-loss
+comparison](passive_loss_comparison.md) quantify three important modeling
+sensitivities.
 
 ## Main Conclusions
 
