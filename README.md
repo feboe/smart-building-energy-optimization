@@ -27,10 +27,12 @@ production EMS software.
 ![Annual operational savings by dispatch strategy for a 1000 kWh BESS](docs/battery/assets/strategy_comparison_1000kwh.png)
 
 - The site already self-consumes about `92%` of local PV and CHP generation.
-- The hourly `1000 kWh` capacity study saves about `13.4k EUR/year`; retaining
-  quarter-hour behavior raises the corresponding estimate to `14.1k EUR/year`.
+- The hourly `1000 kWh` capacity study is the core reference case. It uses no
+  terminal SOC value and no passive losses; the later 15-minute comparison
+  refines the same configuration.
 - In hourly dynamic grid-charging operation, the 24-hour perfect-foresight LP
-  adds about `4.0k EUR/year` over the heuristic. It is an optimization benchmark,
+  saves about `13.3k EUR/year` and adds about `3.9k EUR/year` over the heuristic.
+  It is an optimization benchmark,
   not an expected production-EMS uplift.
 - Larger batteries increase total savings and surplus capture, but show
   diminishing marginal value and fewer equivalent cycles per installed kWh.
@@ -40,8 +42,7 @@ charges, and replacement costs. Savings are measured against the corresponding
 no-battery baseline: fixed-price scenarios use the fixed-price baseline, while
 dynamic-price scenarios use the dynamic-price baseline. See the
 [full experiment results](docs/battery/experiment_results.md) for capacity
-sensitivity, utilization, runtime, feasibility checks, and a 48-hour dispatch
-comparison.
+sensitivity, utilization, runtime, and a 48-hour dispatch comparison.
 
 ### Load Forecasting
 
@@ -101,25 +102,20 @@ python scripts/ingest_data.py
 
 ### Run Battery Experiments
 
+Run the hourly capacity study and Core Reference Case:
+
 ```bash
-# Hourly capacity-sensitivity experiment
 python scripts/battery/run_capacity_analysis.py
-
-# General BESS simulation (15-minute resolution by default)
-python scripts/battery/run_bess_simulation.py
-
-# Compare hourly and 15-minute resolution
-python scripts/battery/run_bess_simulation.py --resolutions hour 15min
-
-# Include 2.5 kW auxiliary demand and 1% monthly self-discharge
-python scripts/battery/run_bess_simulation.py \
-  --standby-power-kw 2.5 \
-  --self-discharge-rate-per-month 0.01
 ```
 
-Shared assumptions are defined in `scripts/battery/experiment_defaults.py`.
-Configuration options, terminal-value comparisons, and audit exports are
-documented in the [BESS LP methodology](docs/battery/lp_optimization.md).
+The complete reproducible sequence for the resolution, terminal-value, and
+passive-loss experiments is documented in the [battery experiment
+runbook](docs/battery/experiment_runs.md).
+
+Shared assumptions and the dispatch contract are documented in the
+[simulation methodology](docs/battery/simulation_methodology.md). LP-specific
+mathematics and decisions are described in the [BESS LP
+methodology](docs/battery/lp_optimization.md).
 
 ### Run Load Forecasting
 
