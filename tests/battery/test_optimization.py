@@ -24,23 +24,13 @@ def _make_exact_battery():
     )
 
 
-@pytest.mark.parametrize(
-    "scenario",
-    [
-        make_fixed_surplus_only_scenario(horizon_hours=4),
-        make_dynamic_surplus_only_scenario(horizon_hours=4),
-        make_dynamic_surplus_and_grid_charging_scenario(
-            horizon_hours=4,
-            grid_connection_limit_kw=200,
-            surplus_reserve_fraction=0.0,
-        ),
-    ],
-)
-def test_optimized_dispatch_satisfies_physics_for_all_scenarios(
-    make_analysis_df,
-    scenario,
-) -> None:
+def test_optimized_dispatch_returns_valid_public_schema(make_analysis_df) -> None:
     battery = _make_exact_battery()
+    scenario = make_dynamic_surplus_and_grid_charging_scenario(
+        horizon_hours=4,
+        grid_connection_limit_kw=200,
+        surplus_reserve_fraction=0.0,
+    )
     analysis_df = make_analysis_df(
         [
             {

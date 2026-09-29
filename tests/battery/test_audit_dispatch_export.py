@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-
 import pandas as pd
 import pytest
-import scripts.battery.run_bess_simulation as simulation_runner
 from scripts.battery.run_bess_simulation import run_bess_simulation
 from src.battery.audit import build_lp_audit_dataframe
 from src.battery.metrics import calculate_dispatch_metrics
@@ -186,34 +183,3 @@ def test_audit_diagnostics_keep_terminal_fields_empty_when_disabled(make_analysi
     assert pd.isna(dispatch_df["terminal_reference_price_eur_per_kwh"].iloc[0])
     assert dispatch_df["terminal_value_eur_per_kwh_soc"].iloc[0] == 0.0
     assert dispatch_df["horizon_terminal_credit_eur"].iloc[0] == 0.0
-
-
-def test_cli_without_dispatch_export_keeps_existing_summary_behavior(
-    make_analysis_df,
-    monkeypatch,
-    tmp_path,
-):
-    """The optional audit export must not change normal summary-file writes."""
-    output_path = tmp_path / "existing_summary.csv"
-    output_path.write_text("previous,result\n")
-    analysis_df = make_analysis_df([{}])
-    captured = {}
-
-    def fake_runner(**kwargs):
-        captured.update(kwargs)
-        return pd.DataFrame({"result": [1]})
-
-    monkeypatch.setattr(
-        simulation_runner, "load_smart_company_analysis", lambda **_: analysis_df
-    )
-    monkeypatch.setattr(simulation_runner, "run_bess_simulation", fake_runner)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["runner", "--resolutions", "hour", "--output", str(output_path)],
-    )
-
-    simulation_runner.main()
-
-    assert captured["dispatch_dir"] is None
-    assert pd.read_csv(output_path).to_dict("list") == {"result": [1]}

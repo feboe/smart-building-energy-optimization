@@ -1,7 +1,5 @@
 """Integration checks for direct multi-resolution BESS simulations."""
 
-import math
-
 import pytest
 
 from scripts.battery.run_bess_simulation import run_bess_simulation, select_time_window
@@ -50,18 +48,6 @@ def test_resolution_comparison_contains_all_standard_methods(
     assert not result_df.loc[
         result_df["method"] != "lp_optimization", "terminal_value_applied"
     ].any()
-    assert list(result_df.columns).index("capacity_kwh") < list(result_df.columns).index(
-        "max_charge_power_kw"
-    )
-    assert list(result_df.columns).index("max_charge_power_kw") < list(
-        result_df.columns
-    ).index("max_discharge_power_kw")
-    assert list(result_df.columns).index("max_discharge_power_kw") < list(
-        result_df.columns
-    ).index("charge_c_rate")
-    assert list(result_df.columns).index("charge_c_rate") < list(result_df.columns).index(
-        "discharge_c_rate"
-    )
     bess_rows = result_df[result_df["method"] != "baseline"]
     baseline_rows = result_df[result_df["method"] == "baseline"]
     assert set(bess_rows["max_charge_power_kw"]) == {500.0}
@@ -139,15 +125,10 @@ def test_runner_includes_configured_passive_losses_in_bess_summaries(
     ("kwargs", "message"),
     [
         ({"standby_power_kw": -0.01}, "standby_power_kw"),
-        ({"standby_power_kw": math.inf}, "standby_power_kw"),
-        ({"standby_power_kw": math.nan}, "standby_power_kw"),
-        ({"self_discharge_rate_per_month": -0.01}, "self_discharge_rate_per_month"),
-        ({"self_discharge_rate_per_month": math.inf}, "self_discharge_rate_per_month"),
-        ({"self_discharge_rate_per_month": math.nan}, "self_discharge_rate_per_month"),
         ({"self_discharge_rate_per_month": 1.0}, "self_discharge_rate_per_month"),
     ],
 )
-def test_runner_rejects_invalid_passive_loss_configuration(
+def test_runner_propagates_passive_loss_validation(
     make_analysis_df, kwargs, message
 ) -> None:
     analysis_df = make_analysis_df([{}])

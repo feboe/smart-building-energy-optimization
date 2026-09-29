@@ -45,19 +45,6 @@ def test_loss_parameters_reject_invalid_values(kwargs) -> None:
         _loss_battery(**kwargs)
 
 
-def test_loss_parameters_accept_zero_and_reference_values() -> None:
-    defaults = _loss_battery()
-    reference = _loss_battery(
-        standby_power_kw=5.0,
-        self_discharge_rate_per_month=0.01,
-    )
-
-    assert defaults.standby_power_kw == 0.0
-    assert defaults.self_discharge_rate_per_month == 0.0
-    assert reference.standby_power_kw == 5.0
-    assert reference.self_discharge_rate_per_month == 0.01
-
-
 def test_bess_preparation_adds_standby_without_mutating_historical_input(
     make_analysis_df,
 ) -> None:

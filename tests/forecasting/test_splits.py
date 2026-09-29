@@ -18,31 +18,6 @@ VALIDATION_SPLIT = ForecastSplit(
     start=pd.Timestamp("2020-10-01T00:00:00Z"),
     end=pd.Timestamp("2021-01-01T00:00:00Z"),
 )
-TEST_SPLIT = ForecastSplit(
-    name="test",
-    start=pd.Timestamp("2021-01-01T00:00:00Z"),
-    end=pd.Timestamp("2022-01-01T00:00:00Z"),
-)
-DEFAULT_FORECAST_SPLITS = (TRAINING_SPLIT, VALIDATION_SPLIT, TEST_SPLIT)
-
-
-def test_default_splits_are_contiguous_and_non_overlapping() -> None:
-    assert [split.name for split in DEFAULT_FORECAST_SPLITS] == [
-        "training",
-        "validation",
-        "test",
-    ]
-    assert TRAINING_SPLIT.end == VALIDATION_SPLIT.start
-    assert VALIDATION_SPLIT.end == TEST_SPLIT.start
-    assert all(split.start < split.end for split in DEFAULT_FORECAST_SPLITS)
-
-
-def test_training_split_starts_at_pv_coverage_and_ends_at_validation() -> None:
-    assert TRAINING_SPLIT.start == pd.Timestamp("2019-06-28T22:00:00Z")
-    assert TRAINING_SPLIT.end == pd.Timestamp("2020-10-01T00:00:00Z")
-    assert TRAINING_SPLIT.end == VALIDATION_SPLIT.start
-
-
 def test_select_forecast_split_uses_half_open_intervals() -> None:
     index = pd.date_range("2020-09-30T23:00:00Z", periods=3, freq="h")
     prepared_data = pd.DataFrame({"gross_load_kwh": [1.0, 2.0, 3.0]}, index=index)

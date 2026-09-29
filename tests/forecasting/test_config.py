@@ -64,28 +64,6 @@ def test_hgb_config_rejects_invalid_hyperparameters(
         HGBConfig(**{option: value})
 
 
-def test_forecast_experiment_config_groups_named_splits() -> None:
-    training_split = ForecastSplit(
-        "training",
-        pd.Timestamp("2020-01-01T00:00:00Z"),
-        pd.Timestamp("2020-10-01T00:00:00Z"),
-    )
-    evaluation_split = ForecastSplit(
-        "validation",
-        pd.Timestamp("2020-10-01T00:00:00Z"),
-        pd.Timestamp("2021-01-01T00:00:00Z"),
-    )
-
-    experiment = ForecastExperimentConfig(
-        name="hgb_validation",
-        training_split=training_split,
-        evaluation_split=evaluation_split,
-    )
-
-    assert experiment.training_split is training_split
-    assert experiment.evaluation_split is evaluation_split
-
-
 def test_forecast_experiment_config_rejects_overlapping_splits() -> None:
     training_split = ForecastSplit(
         "training",

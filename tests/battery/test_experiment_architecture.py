@@ -172,20 +172,21 @@ def test_general_cli_defaults_to_15_minute_resolution(monkeypatch) -> None:
     assert general_args.self_discharge_rate_per_month == 0.0
 
 
-def test_terminal_value_setting_reaches_all_scenarios() -> None:
-    assert {
-        scenario.terminal_value_window_hours
-        for scenario in make_standard_scenarios(None)
-    } == {None}
-    assert {
-        scenario.terminal_value_window_hours
-        for scenario in make_standard_scenarios(4.0)
-    } == {4.0}
-
-
 @pytest.mark.parametrize(
-    ("extra_args", "expected_terminal_value"),
-    [([], None), (["--terminal-value-window-hours", "4"], 4.0)],
+    ("extra_args", "expected_terminal_value", "expected_experiment_name"),
+    [
+        ([], None, "bess_simulation"),
+        (
+            [
+                "--terminal-value-window-hours",
+                "4",
+                "--experiment-name",
+                "terminal_value__4h__15min__1000kwh__2021",
+            ],
+            4.0,
+            "terminal_value__4h__15min__1000kwh__2021",
+        ),
+    ],
 )
 def test_general_cli_forwards_terminal_value_configuration(
     make_analysis_df,
@@ -193,6 +194,7 @@ def test_general_cli_forwards_terminal_value_configuration(
     tmp_path,
     extra_args,
     expected_terminal_value,
+    expected_experiment_name,
 ) -> None:
     analysis_df = _short_analysis(make_analysis_df)
     captured = {}
@@ -221,43 +223,10 @@ def test_general_cli_forwards_terminal_value_configuration(
     simulation_cli.main()
 
     assert captured["terminal_value_window_hours"] == expected_terminal_value
-    assert captured["experiment_name"] == "bess_simulation"
+    assert captured["experiment_name"] == expected_experiment_name
+    assert captured["dispatch_dir"] is None
     assert set(captured["analysis_by_resolution"]) == {"15min"}
-
-
-def test_general_cli_forwards_experiment_name(
-    make_analysis_df,
-    monkeypatch,
-    tmp_path,
-) -> None:
-    analysis_df = _short_analysis(make_analysis_df)
-    captured = {}
-
-    def fake_runner(**kwargs):
-        captured.update(kwargs)
-        return pd.DataFrame({"result": [1]})
-
-    monkeypatch.setattr(
-        simulation_cli, "load_smart_company_analysis", lambda **_: analysis_df
-    )
-    monkeypatch.setattr(simulation_cli, "run_bess_simulation", fake_runner)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "runner",
-            "--days",
-            "1",
-            "--experiment-name",
-            "terminal_value__4h__15min__1000kwh__2021",
-            "--output",
-            str(tmp_path / "summary.csv"),
-        ],
-    )
-
-    simulation_cli.main()
-
-    assert captured["experiment_name"] == "terminal_value__4h__15min__1000kwh__2021"
+    assert pd.read_csv(tmp_path / "summary.csv").to_dict("list") == {"result": [1]}
 
 
 def test_capacity_analysis_defaults_to_no_terminal_value(make_analysis_df) -> None:
