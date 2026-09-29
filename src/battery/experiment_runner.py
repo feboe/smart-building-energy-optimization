@@ -241,7 +241,12 @@ def _run_dispatch_job(
     )
     if audit_export is not None:
         audit_df = build_lp_audit_dataframe(
-            analysis_df, optimized_dispatch_df, battery, scenario, run_timestamp
+            analysis_df,
+            optimized_dispatch_df,
+            battery,
+            scenario,
+            run_timestamp,
+            experiment_name,
         )
         export_path = dispatch_export_path(
             audit_export,

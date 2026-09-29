@@ -17,13 +17,23 @@ These are simulated annual operating outcomes, not an investment assessment.
 
 The main study uses the complete hourly 2021 dataset and tests `250`, `500`,
 `1000`, and `2000 kWh` batteries with heuristic and LP control. It covers fixed
-surplus-only, dynamic surplus-only, and dynamic grid-charging operation. Shared
+surplus-only, dynamic surplus-only, and dynamic grid-charging operation. Its
+`1000 kWh / 500 kW` dynamic grid-charging LP case is the **Core Reference
+Case**: it has no terminal value and no passive losses. It is a comparison
+anchor within the capacity study, not an economically optimal size. Shared
 battery, tariff, metering, and validation assumptions are defined once in the
 [simulation methodology](simulation_methodology.md).
 
 Savings are measured against the matching no-battery price case: fixed-price
 dispatch uses the fixed-price baseline, while both dynamic scenarios use the
 dynamic-price baseline.
+
+Later documents test one extension at a time: the [time-resolution
+comparison](time_resolution_comparison.md) transfers the core reference case
+to 15-minute data, the [terminal-value comparison](terminal_value_comparison.md)
+adds terminal SOC valuation to that high-resolution anchor, and the
+[passive-loss comparison](passive_loss_comparison.md) adds auxiliary demand and
+self-discharge to the terminal-value configuration.
 
 ## Baseline Site Characteristics
 
@@ -52,12 +62,12 @@ strategies.
 
 | Method | Scenario | Annual operational savings | Surplus captured | Equivalent cycles | Runtime |
 |---|---|---:|---:|---:|---:|
-| Heuristic | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 0.9 s |
-| LP | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 2.3 min |
-| Heuristic | Dynamic surplus-only | 5.8k EUR | 67.5% | 62.4 | 8.3 s |
-| LP | Dynamic surplus-only | 6.6k EUR | 74.8% | 69.2 | 2.5 min |
-| Heuristic | Dynamic grid-charging | 9.4k EUR | 66.1% | 200.6 | 8.7 s |
-| LP | Dynamic grid-charging | 13.4k EUR | 74.6% | 169.1 | 2.5 min |
+| Heuristic | Fixed surplus-only | 6.5k EUR | 75.6% | 69.9 | 0.4 s |
+| LP | Fixed surplus-only | 6.5k EUR | 75.5% | 69.8 | 1.5 min |
+| Heuristic | Dynamic surplus-only | 5.8k EUR | 67.5% | 62.4 | 4.4 s |
+| LP | Dynamic surplus-only | 6.5k EUR | 74.7% | 69.1 | 1.6 min |
+| Heuristic | Dynamic grid-charging | 9.4k EUR | 66.1% | 200.6 | 4.8 s |
+| LP | Dynamic grid-charging | 13.3k EUR | 74.5% | 169.6 | 1.6 min |
 
 All savings exclude BESS investment cost.
 
@@ -72,7 +82,7 @@ the LP improves annual operating savings by about `0.7k EUR` because it can
 reserve stored surplus for more valuable deficit hours.
 
 The largest controller difference appears when grid charging is enabled. The
-LP improves annual operating savings by about `4.0k EUR` over the heuristic at
+LP improves annual operating savings by about `3.9k EUR` over the heuristic at
 `1000 kWh`. It jointly considers charging cost, future demand, future surplus,
 SOC, degradation, efficiency losses, and grid headroom rather than reacting to
 price thresholds alone.
@@ -95,7 +105,7 @@ moderate compared with a more expensive hour later in the horizon.
 
 The LP sometimes accepts a higher charging price because it can see that the
 stored energy will displace substantially more expensive imports later. It also
-cycles less: about `169` equivalent cycles instead of `201` for the heuristic.
+cycles less: about `170` equivalent cycles instead of `201` for the heuristic.
 The resulting charge-discharge timing is more selective and produces roughly
 twice the efficiency- and degradation-adjusted price spread.
 
@@ -113,8 +123,8 @@ operating savings at every tested capacity.
 |---:|---:|---:|---:|
 | 250 kWh | 5.1k EUR | - | - |
 | 500 kWh | 8.6k EUR | 3.6k EUR | 14.2 EUR/kWh-year |
-| 1000 kWh | 13.4k EUR | 4.7k EUR | 9.4 EUR/kWh-year |
-| 2000 kWh | 17.9k EUR | 4.5k EUR | 4.5 EUR/kWh-year |
+| 1000 kWh | 13.3k EUR | 4.7k EUR | 9.4 EUR/kWh-year |
+| 2000 kWh | 17.6k EUR | 4.2k EUR | 4.2 EUR/kWh-year |
 
 Total savings continue to increase, but the value of each additional installed
 kWh declines sharply. Moving from `1000` to `2000 kWh` adds twice as much
@@ -174,12 +184,12 @@ Annual metrics aggregate all 8,760 simulated hours.
 
 ## Runtime Tradeoff
 
-The heuristic completes a full annual scenario in approximately `0.9-8.7`
+The heuristic completes a full annual scenario in approximately `0.4-4.8`
 seconds, depending on whether price thresholds and future-surplus calculations
 are required.
 
-In the reported 12-worker rerun, each hourly LP job took approximately
-`2.3-2.5` minutes.
+In the reported four-worker rerun, each hourly LP job took approximately
+`1.5-1.6` minutes.
 The model itself is small, but rolling hourly control builds and solves a new LP
 for every one of the 8,760 simulation hours. Parallel experiment execution
 reduces total wall-clock time across independent runs, but it does not reduce

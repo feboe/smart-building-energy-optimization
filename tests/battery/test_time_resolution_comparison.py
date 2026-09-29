@@ -45,10 +45,8 @@ def test_resolution_comparison_contains_all_standard_methods(
     assert set(result_df["timestep_hours"]) == {0.25, 1.0}
     assert set(result_df["method"]) == {"baseline", "heuristic", "lp_optimization"}
     assert set(result_df["experiment_name"]) == {"bess_simulation"}
-    assert set(result_df["terminal_value_window_hours"]) == {4.0}
-    assert result_df.loc[
-        result_df["method"] == "lp_optimization", "terminal_value_applied"
-    ].all()
+    assert set(result_df["terminal_value_window_hours"]) == {None}
+    assert not result_df["terminal_value_applied"].any()
     assert not result_df.loc[
         result_df["method"] != "lp_optimization", "terminal_value_applied"
     ].any()

@@ -174,11 +174,13 @@ battery_degradation_cost =
 This is not a detailed aging model. It is a cost proxy that discourages
 unnecessary cycling and makes price arbitrage more realistic.
 
-The LP can also apply an optional terminal energy value to avoid a purely
-rolling-horizon-induced discharge at the final interval. For each optimization
-window, it values usable terminal SOC from the time-weighted mean all-in import
-price of the final four real hours (or all remaining intervals for a shortened
-final horizon). For fixed-price dispatch it uses the fixed import price. The
+The LP can optionally apply a terminal energy value to avoid a purely
+rolling-horizon-induced discharge at the final interval. It is disabled in the
+Core Reference Case and must be enabled explicitly with a configured price
+window. For each optimization window, it values usable terminal SOC from the
+time-weighted mean all-in import price of that final window (or all remaining
+intervals for a shortened final horizon). The terminal-value comparison uses
+four real hours. For fixed-price dispatch it uses the fixed import price. The
 value reflects discharge efficiency and the future discharged-throughput cost.
 It affects the LP decision only; it is not reported as electricity revenue,
 net cost, or savings.

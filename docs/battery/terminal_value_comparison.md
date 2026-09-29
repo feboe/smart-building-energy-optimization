@@ -7,10 +7,11 @@ rolling horizon changes the planned terminal state and realised annual result.
 
 Both runs use the shared [simulation
 methodology](simulation_methodology.md) and the same 2021 15-minute,
-`1000 kWh` dynamic grid-charging setup. The only difference is that the
-comparison run values usable terminal SOC from the mean all-in import price
-over the final four horizon hours; the reference run assigns it no value. The
-formula is documented with the [LP objective](lp_optimization.md#terminal-energy-value).
+`1000 kWh` dynamic grid-charging setup used as the High-Resolution Comparison
+Anchor. The only difference is that the comparison run values usable terminal
+SOC from the mean all-in import price over the final four horizon hours; the
+reference run assigns it no value. The formula is documented with the [LP
+objective](lp_optimization.md#terminal-energy-value).
 
 ## Annual Result
 
@@ -25,9 +26,9 @@ directly.
 | Approximate full cycles | 176.54 | 175.77 | -0.76 |
 | Peak grid import | approximately 500 kW | approximately 500 kW | unchanged |
 
-Directly executed energy flows change in 802 of 35,040 intervals (2.29%): 441
-surplus-charge, 58 grid-charge, and 303 discharge decisions. Executed SOC
-differs in 5,342 intervals; either flow or SOC differs in 5,467 (15.60%).
+Directly executed energy flows change in 858 of 35,040 intervals (2.45%): 456
+surplus-charge, 69 grid-charge, and 333 discharge decisions. Executed SOC
+differs in 8,985 intervals; either flow or SOC differs in 9,095 (25.96%).
 
 ## Planned Horizon End State
 
@@ -40,11 +41,13 @@ carry usable energy beyond it.
 
 ## Interpretation
 
-Terminal valuation counteracts the finite-horizon incentive to finish at
-minimum SOC, but has little annual financial effect. The `29.82 EUR` improvement
-is realised operating cost with identical annual start and end SOC; terminal
-credit is not booked as revenue. The unchanged peak and small savings change
-make this a model correction, not a new source of material savings.
+Terminal valuation is a later model correction, not a component of the Core
+Reference Case. It counteracts the finite-horizon incentive to finish at
+minimum SOC, but has little annual financial effect. The `29.82 EUR`
+improvement is realised operating cost with identical annual start and end
+SOC; terminal credit is not booked as revenue. The unchanged peak and small
+savings change make it a model correction, not a new source of material
+savings.
 
 The fixed-price case is not used for the headline comparison because its runs
 finish with different SOC inventories. Comparing their raw annual costs would

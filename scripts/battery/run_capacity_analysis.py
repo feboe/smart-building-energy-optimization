@@ -14,7 +14,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.battery.experiment_defaults import (
-    TERMINAL_VALUE_WINDOW_HOURS,
     make_standard_batteries,
     make_standard_scenarios,
 )
@@ -41,7 +40,7 @@ def run_capacity_sensitivity(
     capacities_kwh: list[float] | None = None,
     run_timestamp: str | None = None,
     max_workers: int | None = None,
-    terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
+    terminal_value_window_hours: float | None = None,
     dispatch_dir: Path | None = None,
 ) -> pd.DataFrame:
     """Run the standard capacity study using the shared experiment engine."""

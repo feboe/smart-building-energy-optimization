@@ -10,12 +10,18 @@ peaks, short surplus periods, and simulated BESS value change materially.
 
 ## Experiment Setup
 
+The hourly side is the Core Reference Case from the capacity study: no terminal
+SOC value and no passive losses. The 15-minute side transfers exactly that
+configuration to the higher-resolution source data, making it the
+High-Resolution Comparison Anchor for the later terminal-value test.
+
 | Parameter | Hourly model | 15-minute model |
 | --- | ---: | ---: |
 | 2021 observations | 8,760 | 35,040 |
 | Timestep | 1 h | 0.25 h |
 | Rolling horizon | 24 steps | 96 steps |
 | Battery energy / power | 1000 kWh / 500 kW | 1000 kWh / 500 kW |
+| Terminal value / passive losses | disabled / disabled | disabled / disabled |
 
 The source provides both measurement resolutions. Hourly day-ahead prices are
 assigned to all four 15-minute intervals of the corresponding hour. Dispatch
@@ -44,12 +50,12 @@ partly netted in the hourly representation.
 
 | Perfect-foresight LP strategy | Hourly savings | 15-minute savings | Difference |
 | --- | ---: | ---: | ---: |
-| Dynamic surplus-only | 6.6k EUR | 7.4k EUR | +13.4% |
-| Dynamic surplus plus grid charging | 13.4k EUR | 14.1k EUR | +5.8% |
+| Dynamic surplus-only | 6.5k EUR | 7.4k EUR | +13.6% |
+| Dynamic surplus plus grid charging | 13.3k EUR | 14.1k EUR | +5.8% |
 
 For each resolution, savings are measured against the corresponding baseline
 without a battery. The final percentage then shows how this calculated saving
-changes between the hourly and 15-minute models. Therefore, `+13.4%` and
+changes between the hourly and 15-minute models. Therefore, `+13.6%` and
 `+5.8%` mean that the 15-minute model estimates a higher operational BESS
 value; they do not represent a direct LP-versus-heuristic comparison.
 
@@ -69,7 +75,7 @@ average. It still does not represent instantaneous second-level peaks.
 
 - Hourly data is adequate for a first annual-energy estimate but less reliable
   for peak and dispatch questions.
-- The hourly model understates simulated BESS savings by 5.8% to 13.4% in the
+- The hourly model understates simulated BESS savings by 5.8% to 13.6% in the
   two dynamic LP cases.
 - The 500 kW grid limit is a transparent scenario assumption, not a known site
   connection rating.

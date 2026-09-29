@@ -15,7 +15,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.battery.experiment_defaults import (
-    TERMINAL_VALUE_WINDOW_HOURS,
     make_standard_batteries,
     make_standard_scenarios,
 )
@@ -34,7 +33,7 @@ def run_bess_simulation(
     capacities_kwh: list[float] | None = None,
     run_timestamp: str | None = None,
     max_workers: int | None = None,
-    terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
+    terminal_value_window_hours: float | None = None,
     dispatch_dir: Path | None = None,
     experiment_name: str = "bess_simulation",
     standby_power_kw: float = 0.0,
@@ -149,17 +148,15 @@ def parse_args() -> argparse.Namespace:
         help="Length from start; ignored when --end is supplied (default: 7).",
     )
     parser.add_argument("--max-workers", type=int)
-    terminal_value_group = parser.add_mutually_exclusive_group()
-    terminal_value_group.add_argument(
+    parser.add_argument(
         "--terminal-value-window-hours",
         type=float,
-        default=TERMINAL_VALUE_WINDOW_HOURS,
-        help="Terminal-value price window in real hours (default: 4).",
+        help="Enable terminal SOC valuation using this price window in real hours.",
     )
-    terminal_value_group.add_argument(
-        "--no-terminal-value",
-        action="store_true",
-        help="Disable terminal SOC valuation for an A/B comparison.",
+    parser.add_argument(
+        "--experiment-name",
+        default="bess_simulation",
+        help="Experiment identifier written to result and audit metadata.",
     )
     parser.add_argument(
         "--dispatch-dir",
@@ -186,16 +183,13 @@ def _run_from_args(args: argparse.Namespace) -> None:
         selected_df = select_time_window(analysis_df, args.start, args.end, args.days)
         print(f"Selected {len(selected_df):,} {resolution} rows.")
         analysis_by_resolution[resolution] = selected_df
-    terminal_value_window_hours = (
-        None if args.no_terminal_value else args.terminal_value_window_hours
-    )
     results_df = run_bess_simulation(
         analysis_by_resolution=analysis_by_resolution,
         capacities_kwh=args.capacities_kwh,
         max_workers=args.max_workers,
-        terminal_value_window_hours=terminal_value_window_hours,
+        terminal_value_window_hours=args.terminal_value_window_hours,
         dispatch_dir=args.dispatch_dir,
-        experiment_name="bess_simulation",
+        experiment_name=args.experiment_name,
         standby_power_kw=args.standby_power_kw,
         self_discharge_rate_per_month=args.self_discharge_rate_per_month,
     )

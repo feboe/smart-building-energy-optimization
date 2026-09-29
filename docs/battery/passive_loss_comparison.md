@@ -8,7 +8,8 @@ model](simulation_methodology.md#battery-model).
 ## Experiment Setup
 
 Both runs use the shared methodology and the same 2021 15-minute, `1000 kWh`
-dynamic grid-charging LP setup. The comparison run adds:
+dynamic grid-charging LP setup with the four-hour terminal value introduced in
+the preceding terminal-value comparison. The comparison run adds:
 
 | Passive-loss assumption | Value |
 | --- | ---: |
@@ -16,7 +17,8 @@ dynamic grid-charging LP setup. The comparison run adds:
 | Self-discharge | 1% per 30-day month |
 
 The `2.5 kW` auxiliary load is a sensitivity assumption, not a measured site or
-product value.
+product value. Passive losses are a follow-up sensitivity, not part of either
+reference configuration.
 
 ## Annual Result
 
@@ -40,7 +42,7 @@ grid-import peak barely change.
 ## Interpretation
 
 The constant auxiliary load causes almost the entire economic effect. Its
-21.9 MWh annual demand is several orders of magnitude larger than the 37.8 kWh
+21.9 MWh annual demand is several orders of magnitude larger than the 37.6 kWh
 self-discharge loss in the main LP case. Part of that load is covered by local
 generation, which explains why grid import rises by less than 21.9 MWh while
 grid export also declines.

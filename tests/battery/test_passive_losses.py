@@ -219,6 +219,7 @@ def test_baseline_stays_unchanged_and_summary_and_audit_export_passive_losses(
         battery,
         scenario,
         run_timestamp="2021-01-01T00:00:00+00:00",
+        experiment_name="passive_loss_test",
     )
 
     assert calculate_baseline_metrics(analysis_df, scenario) == baseline_before
@@ -238,6 +239,7 @@ def test_baseline_stays_unchanged_and_summary_and_audit_export_passive_losses(
     }
     assert required_passive_loss_columns.issubset(audit.columns)
     assert set(audit["model_version"]) == {BESS_MODEL_VERSION}
+    assert set(audit["experiment_name"]) == {"passive_loss_test"}
 
 
 def test_validator_rejects_manipulated_passive_loss_columns(make_analysis_df) -> None:

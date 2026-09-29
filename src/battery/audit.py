@@ -109,6 +109,7 @@ def build_lp_audit_dataframe(
     battery: BatteryParameters,
     scenario: ScenarioParameters,
     run_timestamp: str,
+    experiment_name: str = "bess_simulation",
 ) -> pd.DataFrame:
     """Return one self-contained audit row per executed LP decision.
 
@@ -201,6 +202,7 @@ def build_lp_audit_dataframe(
 
     audit = pd.DataFrame(
         {
+            "experiment_name": experiment_name,
             "run_timestamp": run_timestamp,
             "observation_timestamp": prepared_df["observation_timestamp"],
             "local_timestamp": prepared_df["local_timestamp"],

@@ -17,13 +17,12 @@ MAX_SOC_FRACTION = 1.00
 ETA_CHARGE = 0.95
 ETA_DISCHARGE = 0.95
 DEGRADATION_COST_EUR_PER_KWH = 0.03
-PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW = 5.0
+PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW = 2.5
 PASSIVE_LOSS_REFERENCE_SELF_DISCHARGE_RATE_PER_MONTH = 0.01
 
 IMPORT_MARKUP_EUR_PER_KWH = 0.115
 EXPORT_PRICE_EUR_PER_KWH = 0.08
 HORIZON_HOURS = 24
-TERMINAL_VALUE_WINDOW_HOURS = 4.0
 GRID_CONNECTION_LIMIT_KW = 500.0
 SURPLUS_RESERVE_FRACTION = 1.0
 
@@ -76,7 +75,7 @@ def make_passive_loss_reference_battery(capacity_kwh: float) -> BatteryParameter
 
 
 def make_standard_scenarios(
-    terminal_value_window_hours: float | None = TERMINAL_VALUE_WINDOW_HOURS,
+    terminal_value_window_hours: float | None = None,
 ) -> list[ScenarioParameters]:
     """Return the three standard BESS dispatch scenarios."""
     return [

@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import scripts.battery.run_bess_simulation as simulation_cli
+import scripts.battery.run_capacity_analysis as capacity_cli
 from scripts.battery.experiment_defaults import (
     C_RATE,
     DEGRADATION_COST_EUR_PER_KWH,
@@ -15,6 +16,8 @@ from scripts.battery.experiment_defaults import (
     ETA_DISCHARGE,
     GRID_CONNECTION_LIMIT_KW,
     HORIZON_HOURS,
+    PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW,
+    PASSIVE_LOSS_REFERENCE_SELF_DISCHARGE_RATE_PER_MONTH,
     make_standard_batteries,
     make_standard_scenarios,
     make_passive_loss_reference_battery,
@@ -49,7 +52,7 @@ def _stable_summary(frame: pd.DataFrame) -> pd.DataFrame:
 
 def test_standard_builders_keep_established_assumptions() -> None:
     battery = make_standard_batteries([1000])[0]
-    scenarios = make_standard_scenarios(4.0)
+    scenarios = make_standard_scenarios()
 
     assert battery.max_charge_power_kw == 1000 * C_RATE == 500
     assert battery.max_discharge_power_kw == 500
@@ -59,7 +62,9 @@ def test_standard_builders_keep_established_assumptions() -> None:
     assert battery.standby_power_kw == 0.0
     assert battery.self_discharge_rate_per_month == 0.0
     passive_loss_reference_battery = make_passive_loss_reference_battery(1000)
-    assert passive_loss_reference_battery.standby_power_kw == 5.0
+    assert PASSIVE_LOSS_REFERENCE_STANDBY_POWER_KW == 2.5
+    assert passive_loss_reference_battery.standby_power_kw == 2.5
+    assert PASSIVE_LOSS_REFERENCE_SELF_DISCHARGE_RATE_PER_MONTH == 0.01
     assert passive_loss_reference_battery.self_discharge_rate_per_month == 0.01
     assert [scenario.name for scenario in scenarios] == [
         "fixed_surplus_only",
@@ -67,7 +72,7 @@ def test_standard_builders_keep_established_assumptions() -> None:
         "dynamic_surplus_grid_charging",
     ]
     assert {scenario.horizon_hours for scenario in scenarios} == {HORIZON_HOURS}
-    assert {scenario.terminal_value_window_hours for scenario in scenarios} == {4.0}
+    assert {scenario.terminal_value_window_hours for scenario in scenarios} == {None}
     assert scenarios[-1].grid_connection_limit_kw == GRID_CONNECTION_LIMIT_KW
 
 
@@ -161,7 +166,8 @@ def test_general_cli_defaults_to_15_minute_resolution(monkeypatch) -> None:
 
     assert general_args.resolutions == ["15min"]
     assert general_args.days == 7
-    assert general_args.terminal_value_window_hours == 4.0
+    assert general_args.terminal_value_window_hours is None
+    assert general_args.experiment_name == "bess_simulation"
     assert general_args.standby_power_kw == 0.0
     assert general_args.self_discharge_rate_per_month == 0.0
 
@@ -179,7 +185,7 @@ def test_terminal_value_setting_reaches_all_scenarios() -> None:
 
 @pytest.mark.parametrize(
     ("extra_args", "expected_terminal_value"),
-    [([], 4.0), (["--no-terminal-value"], None)],
+    [([], None), (["--terminal-value-window-hours", "4"], 4.0)],
 )
 def test_general_cli_forwards_terminal_value_configuration(
     make_analysis_df,
@@ -215,7 +221,55 @@ def test_general_cli_forwards_terminal_value_configuration(
     simulation_cli.main()
 
     assert captured["terminal_value_window_hours"] == expected_terminal_value
+    assert captured["experiment_name"] == "bess_simulation"
     assert set(captured["analysis_by_resolution"]) == {"15min"}
+
+
+def test_general_cli_forwards_experiment_name(
+    make_analysis_df,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    analysis_df = _short_analysis(make_analysis_df)
+    captured = {}
+
+    def fake_runner(**kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame({"result": [1]})
+
+    monkeypatch.setattr(
+        simulation_cli, "load_smart_company_analysis", lambda **_: analysis_df
+    )
+    monkeypatch.setattr(simulation_cli, "run_bess_simulation", fake_runner)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "runner",
+            "--days",
+            "1",
+            "--experiment-name",
+            "terminal_value__4h__15min__1000kwh__2021",
+            "--output",
+            str(tmp_path / "summary.csv"),
+        ],
+    )
+
+    simulation_cli.main()
+
+    assert captured["experiment_name"] == "terminal_value__4h__15min__1000kwh__2021"
+
+
+def test_capacity_analysis_defaults_to_no_terminal_value(make_analysis_df) -> None:
+    result_df = capacity_cli.run_capacity_sensitivity(
+        _short_analysis(make_analysis_df),
+        capacities_kwh=[1000],
+        run_timestamp=RUN_TIMESTAMP,
+        max_workers=1,
+    )
+
+    assert set(result_df["terminal_value_window_hours"]) == {None}
+    assert not result_df["terminal_value_applied"].any()
 
 
 def test_general_cli_forwards_passive_loss_configuration(

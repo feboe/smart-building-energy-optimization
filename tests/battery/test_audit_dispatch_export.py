@@ -71,6 +71,7 @@ def test_horizon_diagnostics_are_opt_in_and_audit_sums_match_metrics(make_analys
         battery,
         scenario,
         run_timestamp="2021-01-01T00:00:00+00:00",
+        experiment_name="audit_unit_test",
     )
     required_columns = {
         "pv_generation_kw",
@@ -80,6 +81,7 @@ def test_horizon_diagnostics_are_opt_in_and_audit_sums_match_metrics(make_analys
         "soc_end_pct",
         "baseline_net_cost_eur",
         "cost_savings_eur",
+        "experiment_name",
         "remaining_grid_connection_headroom_kwh",
         *HORIZON_DIAGNOSTIC_COLUMNS,
     }
@@ -101,6 +103,7 @@ def test_horizon_diagnostics_are_opt_in_and_audit_sums_match_metrics(make_analys
         metrics["cost_savings_eur"]
     )
     assert (audit_df["remaining_grid_connection_headroom_kwh"] >= 0).all()
+    assert set(audit_df["experiment_name"]) == {"audit_unit_test"}
 
 
 def test_multi_resolution_runner_exports_only_three_lp_parquet_files(
@@ -121,6 +124,7 @@ def test_multi_resolution_runner_exports_only_three_lp_parquet_files(
         run_timestamp="2021-01-01T00:00:00+00:00",
         max_workers=2,
         dispatch_dir=dispatch_dir,
+        experiment_name="audit_export_test",
     )
 
     export_files = sorted(dispatch_dir.glob("*.parquet"))
@@ -131,6 +135,7 @@ def test_multi_resolution_runner_exports_only_three_lp_parquet_files(
         audit_df = pd.read_parquet(path)
         assert len(audit_df) == len(analysis_df)
         assert set(audit_df["method"]) == {"lp_optimization"}
+        assert set(audit_df["experiment_name"]) == {"audit_export_test"}
         assert set(audit_df["resolution"]) == {"hour"}
         scenario = audit_df["scenario"].iloc[0]
         summary = result_df.query(

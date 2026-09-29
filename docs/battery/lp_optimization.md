@@ -83,9 +83,10 @@ when `terminal_value_window_hours` is not configured.
 
 For each horizon, the dynamic-price scenarios use the time-weighted mean all-in
 import price (day-ahead price plus configured markup) over the final configured
-window. The standard experiment uses four real hours: four hourly intervals or
-16 quarter-hour intervals. A shorter final horizon uses all remaining rows.
-The fixed-price scenario instead uses its complete fixed import price.
+window. The terminal-value comparison enables a four-real-hour window: four
+hourly intervals or 16 quarter-hour intervals. A shorter final horizon uses all
+remaining rows. The fixed-price scenario instead uses its complete fixed import
+price.
 
 The value per internal kWh SOC is the expected usable discharge energy times
 its net avoided import cost:
